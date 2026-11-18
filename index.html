@@ -127,6 +127,14 @@ main { padding-top: 14px; }
 .cal .wk small { font-weight: 400; color: var(--text-3); font-size: 10px; }
 @media (max-width: 380px) { .cal { grid-template-columns: repeat(7, 1fr) 44px; gap: 3px; } .cal .day .r { font-size: 11px; } }
 
+.pctbox { text-align: right; }
+.pctbox .k, .pk { font-size: 12px; color: var(--text-3); }
+.pctbox .pv { font-size: 18px; font-weight: 650; margin: 2px 0; }
+.pv { font-size: 16px; font-weight: 650; }
+.pk { margin-top: 2px; font-weight: 600; }
+.pctrow { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px; font-size: 15px; }
+.pctrow div { display: flex; gap: 6px; align-items: baseline; }
+.pctrow .k { color: var(--text-3); font-size: 13px; }
 .wstrip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 16px; }
 .wd { background: var(--surface-2); border-radius: 10px; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: var(--text-3); }
 .wd b { font-size: 14px; font-weight: 650; }
@@ -347,7 +355,7 @@ async function getBin(path, fresh) {
 let DATA = { trades: [], ideas: [] }, META = null, MARKS = LS.get("as_marks", {});
 const S = Object.assign({ tab: "home", curve: "m", mode: "week", anchor: null, pair: "all", acc: "all", calSel: null, ideaF: "no" }, LS.get("as_ui", {}));
 if (!["home", "stats", "trades", "ideas"].includes(S.tab)) S.tab = "home";
-function saveUi() { LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve }); }
+function saveUi() { LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit }); }
 
 async function loadMeta(fresh) {
   const r = await fetch("meta.json?t=" + Date.now(), { cache: "no-store" });
@@ -497,6 +505,23 @@ function pairOk(t) {
     && (S.acc === "all" || (S.acc === "none" ? !(t.accs && t.accs.length) : (t.accs || []).some(x => x.a === S.acc)));
 }
 function accName(id) { const m = MARKS["_acc_" + id]; if (m && m.n) return m.n; const a = (DATA.accounts || []).find(x => x.id === id); return a ? a.name : id; }
+/* % of the account: each trade has its own % per account (profit / balance before, from MT5 history).
+   Period total = compounded, as the account really grew. Several accounts → one line each. */
+const oneAcc = () => S.acc !== "all" && S.acc !== "none" ? S.acc : null;
+function accPct(t, a) { const x = (t.accs || []).find(y => y.a === a); return x && x.pct != null ? x.pct : null; }
+function pctSum(ts, a) { let g = 1, any = false; for (const t of ts) { const p = accPct(t, a); if (p != null) { g *= 1 + p / 100; any = true; } } return any ? (g - 1) * 100 : null; }
+function fmtP(p) {
+  if (p == null) return "—";
+  const a = Math.abs(p); if (a < 0.005) return "0%";
+  return (p > 0 ? "+" : "−") + (a >= 10 ? a.toFixed(1) : a.toFixed(2)).replace(/\.?0+$/, "") + "%";
+}
+function pctLine(ts, short) {
+  const accs = oneAcc() ? [oneAcc()] : (DATA.accounts || []).map(a => a.id);
+  const parts = accs.map(a => [a, pctSum(ts, a)]).filter(x => x[1] != null);
+  if (!parts.length) return "";
+  return parts.map(([a, p]) => `${accs.length > 1 && !short ? esc(accName(a)) + " " : ""}<span class="${cls(p)}">${fmtP(p)}</span>`).join(short ? " / " : " · ");
+}
+function pctDD(ts, a) { let g = 1, peak = 1, dd = 0; for (const t of ts) { const p = accPct(t, a); if (p == null) continue; g *= 1 + p / 100; peak = Math.max(peak, g); dd = Math.max(dd, 1 - g / peak); } return dd * 100; }
 function riskOf(t) {
   if (t.accs && t.accs.some(x => x.risk != null)) {
     const list = S.acc !== "all" && S.acc !== "none" ? t.accs.filter(x => x.a === S.acc) : t.accs;
@@ -668,7 +693,8 @@ function viewOverview() {
   const a = anchor(), ts = inPeriod(S.mode, a), s = stats(ts);
   if (!ts.length) return `<div class="card"><div class="empty">Нет сделок за этот период</div></div>`;
   let h = `<div class="card"><div class="hero"><div><div class="big ${cls(s.sum)}">${fmtR(s.sum)}</div>
-    <div class="sub">${s.n} ${plural(s.n)}${s.open ? ` · ${s.open} открыта` : ""} · винрейт ${pct(s.wr)}</div></div></div>
+    <div class="sub">${s.n} ${plural(s.n)}${s.open ? ` · ${s.open} открыта` : ""} · винрейт ${pct(s.wr)}</div></div>
+    ${pctLine(ts) ? `<div class="pctbox"><div class="k">К счёту</div><div class="pv">${pctLine(ts)}</div>${oneAcc() ? `<div class="k">просадка −${num(pctDD(ts.filter(t => t.r != null), oneAcc()), 2)}%</div>` : ""}</div>` : ""}</div>
     <div class="tiles">
       <div class="tile"><div class="k">Плюсов / минусов / в 0</div><div class="v">${s.w} / ${s.l} / ${s.be}</div></div>
       <div class="tile"><div class="k">Средний плюс</div><div class="v pos">${s.avgW == null ? "—" : fmtR(s.avgW)}</div></div>
@@ -720,7 +746,7 @@ function tradeRow(t) {
   const acc = S.acc === "all" && t.accs && t.accs.length ? t.accs.map(x => accName(x.a)).join(" + ") : "";
   const l2 = [t.time ? t.time + (t.ctime ? "→" + t.ctime : "") : dLabel(t.date), session(t) !== "нет времени" ? session(t) : "", t.reason || (t.open ? "открыта" : ""), riskOf(t) ? "риск " + riskOf(t) : "", acc].filter(Boolean).join(" · ");
   return `<button class="item" data-trade="${esc(t.id)}"><div class="main"><div class="l1">${t.pair} <span class="badge">${sideRu(t.side)}</span>${mk ? `<span class="mk">${mk}</span>` : ""}</div>
-    <div class="l2">${esc(l2)}</div></div><div class="rv ${cls(t.r)}">${t.open ? "…" : fmtR(t.r)}${t.num ? `<small>№${t.num}</small>` : ""}</div></button>`;
+    <div class="l2">${esc(l2)}</div></div><div class="rv ${cls(t.r)}">${t.open ? "…" : fmtR(t.r)}${oneAcc() && accPct(t, oneAcc()) != null ? `<small class="${cls(accPct(t, oneAcc()))}">${fmtP(accPct(t, oneAcc()))}</small>` : t.num ? `<small>№${t.num}</small>` : ""}</div></button>`;
 }
 function tradeList(ts, flat) {
   if (!ts.length) return `<div class="empty">Нет сделок</div>`;
@@ -752,7 +778,7 @@ function viewCalendar() {
       const alpha = list.length ? 0.12 + 0.5 * Math.min(1, Math.abs(s.sum) / maxAbs) : 0;
       const bg = list.length && Math.abs(s.sum) > 0.04 ? `background:color-mix(in srgb, var(${s.sum > 0 ? "--pos" : "--neg"}) ${Math.round(alpha * 100)}%, var(--surface-2))` : "";
       h += `<button class="day${out ? " out" : ""}${S.calSel === k ? " sel" : ""}" data-day="${k}" style="${bg}"><span class="d">${d.getDate()}</span>
-        ${list.length ? `<span><span class="r">${fmtR(s.sum)}</span><br><span class="n">${list.length} ${list.length === 1 ? "сд." : "сд."}</span></span>` : ""}</button>`;
+        ${list.length ? `<span><span class="r">${fmtR(s.sum)}</span><br><span class="n">${oneAcc() && pctSum(list, oneAcc()) != null ? fmtP(pctSum(list, oneAcc())) : list.length + " сд."}</span></span>` : ""}</button>`;
       d = addDays(d, 1);
     }
     const ws = stats(wk);
@@ -775,14 +801,15 @@ function viewHome() {
   const mo = ts.filter(t => t.date.slice(0, 7) === today.slice(0, 7)), mss = stats(mo);
   let h = `<div class="card"><h3>Сегодня · ${dLong(today)}</h3>
     <div class="hero"><div><div class="big ${tdy.length ? cls(s.sum) : "zero"}">${tdy.length ? fmtR(s.sum) : "0R"}</div>
+    ${tdy.length && pctLine(tdy) ? `<div class="pv" style="margin-top:6px">${pctLine(tdy)}</div>` : ""}
     <div class="sub">${tdy.length ? `${s.n} ${plural(s.n)}${s.open ? ` · ${s.open} открыта` : ""}` : "Сделок пока нет"}${!tdy.length && prevDay ? ` · ${dLabel(prevDay)}: ${fmtR(stats(ts.filter(t => t.date === prevDay)).sum)}` : ""}</div></div></div>
     <div class="wstrip">${DOW.slice(0, 5).map((d, i) => {
       const day = iso(addDays(monday(now), i)), x = ts.filter(t => t.date === day), xs = stats(x);
       return `<button class="wd${day === today ? " now" : ""}" data-day="${day}"><span>${d}</span><b class="${x.length ? cls(xs.sum) : "zero"}">${x.length ? fmtR(xs.sum) : "·"}</b></button>`;
     }).join("")}</div>
     <div class="tiles" style="grid-template-columns:repeat(2,1fr)">
-      <div class="tile"><div class="k">Эта неделя</div><div class="v ${cls(ws.sum)}">${fmtR(ws.sum)} <small style="font-weight:400;color:var(--text-3);font-size:12px">${ws.n} ${plural(ws.n)}</small></div></div>
-      <div class="tile"><div class="k">${MONF[now.getMonth()]}</div><div class="v ${cls(mss.sum)}">${fmtR(mss.sum)} <small style="font-weight:400;color:var(--text-3);font-size:12px">${mss.n} ${plural(mss.n)}</small></div></div>
+      <div class="tile"><div class="k">Эта неделя</div><div class="v ${cls(ws.sum)}">${fmtR(ws.sum)} <small style="font-weight:400;color:var(--text-3);font-size:12px">${ws.n} ${plural(ws.n)}</small></div>${pctLine(wk) ? `<div class="pk">${pctLine(wk)}</div>` : ""}</div>
+      <div class="tile"><div class="k">${MONF[now.getMonth()]}</div><div class="v ${cls(mss.sum)}">${fmtR(mss.sum)} <small style="font-weight:400;color:var(--text-3);font-size:12px">${mss.n} ${plural(mss.n)}</small></div>${pctLine(mo) ? `<div class="pk">${pctLine(mo)}</div>` : ""}</div>
     </div>
     ${tdy.length ? `<div class="list" style="margin-top:12px">${tdy.slice().reverse().map(tradeRow).join("")}</div>` : ""}</div>`;
   return `<div class="cols-home"><div class="a-today">${h}</div><div class="a-curve">${homeCurve(ts)}</div><div class="a-cal">${viewCalendar()}</div></div>`;
@@ -796,22 +823,30 @@ function homeCurve(ts) {
   const start = c[2] ? addDays(today, 1 - c[2]) : (done.length ? pd(done[0].date) : today);
   const from = iso(start), inR = done.filter(t => t.date >= from);
   const span = Math.max(1, (today - start) / 864e5);
-  const byDay = {}; for (const t of inR) byDay[t.date] = (byDay[t.date] || 0) + t.r;
+  const acc = oneAcc(), inP = S.unit === "%" && acc;
+  const days = {}; for (const t of inR) (days[t.date] = days[t.date] || []).push(t);
   let cum = 0;
+  const F = inP ? fmtP : fmtR;
   const pts = [{ x: 0, c: 0, tip: `${dLabel(from)} · начало` }];
-  Object.keys(byDay).sort().forEach(d => {
-    cum += byDay[d];
-    pts.push({ x: Math.min(1, (pd(d) - start) / 864e5 / span), c: cum, tip: `<b>${fmtR(cum)}</b> с ${dLabel(from)}<br>${dLong(d)}: ${fmtR(byDay[d])}` });
+  Object.keys(days).sort().forEach(d => {
+    const day = inP ? pctSum(days[d], acc) : days[d].reduce((a, t) => a + t.r, 0);
+    if (day == null) return;
+    cum = inP ? ((1 + cum / 100) * (1 + day / 100) - 1) * 100 : cum + day;
+    pts.push({ x: Math.min(1, (pd(d) - start) / 864e5 / span), c: cum, tip: `<b>${F(cum)}</b> с ${dLabel(from)}<br>${dLong(d)}: ${F(day)}` });
   });
-  if (pts[pts.length - 1].x < 1) pts.push({ x: 1, c: cum, tip: `<b>${fmtR(cum)}</b> на сегодня` });
+  if (pts[pts.length - 1].x < 1) pts.push({ x: 1, c: cum, tip: `<b>${F(cum)}</b> на сегодня` });
   const st = stats(inR);
   const v = document.getElementById("view"), inner = Math.min((v.clientWidth || 375) - 32, 1256);
   const W = DESK() ? inner - 16 - 400 - 42 : null;
-  const chart = inR.length ? curveChart(pts, 1, dLabel(from), "сегодня", DESK() ? 250 : 190, W) : `<div class="empty">Нет сделок за этот период</div>`;
+  const hint = S.unit === "%" && !acc ? `<div class="hint" style="margin:0 0 6px">Проценты считаются по одному счёту — выбери счёт сверху</div>` : "";
+  const chart = hint + (inR.length ? curveChart(pts, 1, dLabel(from), "сегодня", DESK() ? 250 : 190, W) : `<div class="empty">Нет сделок за этот период</div>`);
   return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-      <div><h3 style="margin-bottom:4px">Кривая R</h3><div style="font-size:26px;font-weight:700;letter-spacing:-.02em" class="${cls(st.sum)}">${fmtR(st.sum)}</div>
-      <div class="sub" style="color:var(--text-2);font-size:13px">${st.n} ${plural(st.n)} · винрейт ${pct(st.wr)} · просадка ${st.dd ? "−" + num(st.dd) + "R" : "0R"}</div></div>
-      <div class="seg" style="flex:none;width:auto">${CURVES.map(([k, n]) => `<button class="${c[0] === k ? "on" : ""}" data-curve="${k}" style="padding:0 10px">${n}</button>`).join("")}</div>
+      <div><h3 style="margin-bottom:4px">Кривая ${inP ? "% счёта" : "R"}</h3><div style="font-size:26px;font-weight:700;letter-spacing:-.02em" class="${cls(inP ? cum : st.sum)}">${inP ? fmtP(cum) : fmtR(st.sum)}</div>
+      <div class="sub" style="color:var(--text-2);font-size:13px">${st.n} ${plural(st.n)} · винрейт ${pct(st.wr)} · просадка ${inP ? "−" + num(pctDD(inR, acc), 2) + "%" : st.dd ? "−" + num(st.dd) + "R" : "0R"}</div>
+      ${!inP && pctLine(inR) ? `<div class="pk" style="margin-top:2px">${pctLine(inR)}</div>` : ""}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+      <div class="seg" style="flex:none;width:auto"><button class="${!inP ? "on" : ""}" data-unit="R" style="padding:0 12px">R</button><button class="${inP ? "on" : ""}" data-unit="%" style="padding:0 12px">%</button></div>
+      <div class="seg" style="flex:none;width:auto">${CURVES.map(([k, n]) => `<button class="${c[0] === k ? "on" : ""}" data-curve="${k}" style="padding:0 10px">${n}</button>`).join("")}</div></div>
     </div><div style="margin-top:12px">${chart}</div></div>`;
 }
 function viewIdeas() {
@@ -933,10 +968,12 @@ function openTrade(id) {
   const kv = [["Направление", sideRu(t.side)], ["Сессия", session(t) === "нет времени" ? "—" : session(t)],
     ["Вход", t.time ? `${dLabel(t.date)} ${t.time}` : dLabel(t.date)], ["Выход", t.ctime ? `${t.cdate && t.cdate !== t.date ? dLabel(t.cdate) + " " : ""}${t.ctime}` : (t.open ? "открыта" : "—")],
     ["Закрыта", t.reason || "—"], ["Длительность", duration(t) || "—"], ["Номер", t.num ? "Trade№" + t.num : "—"],
-    ["Счёт", t.accs && t.accs.length ? t.accs.map(x => accName(x.a) + (x.risk != null ? " · " + x.risk + "%" : "")).join(", ") : "—"]];
-  if (!(t.accs && t.accs.some(x => x.risk != null)) && t.risk) kv.push(["Риск", t.risk], ["", ""]);
+    ["Счёт", t.accs && t.accs.length ? t.accs.map(x => accName(x.a)).join(", ") : "—"],
+    ["Риск", t.accs && t.accs.some(x => x.risk != null) ? t.accs.filter(x => x.risk != null).map(x => (x.est ? "≈" : "") + x.risk + "%").join(" / ") : (t.risk || "—")]];
+  const pl = (t.accs || []).filter(x => x.pct != null);
+  const pctHtml = pl.length ? `<div class="pctrow">${pl.map(x => `<div><span class="k">${esc(accName(x.a))}</span><b class="${cls(x.pct)}">${fmtP(x.pct)}</b></div>`).join("")}</div>` : "";
   let h = `<div class="shead"><div class="t">${t.pair} · ${dLong(t.date)}</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
-    <div class="card"><div class="big ${cls(t.r)}" style="font-size:40px;font-weight:700;letter-spacing:-.03em">${t.open ? "открыта" : fmtR(t.r)}</div>
+    <div class="card"><div class="big ${cls(t.r)}" style="font-size:40px;font-weight:700;letter-spacing:-.03em">${t.open ? "открыта" : fmtR(t.r)}</div>${pctHtml}
     <div class="kv" style="margin-top:14px">${kv.map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`).join("")}</div>
     ${t.flags ? `<div class="hint">${esc(t.flags.join(" · "))}</div>` : ""}</div>
     <div class="card"><h3>По системе?</h3><div class="marks">
@@ -1056,6 +1093,7 @@ document.addEventListener("click", e => {
   else if (b.dataset.pair) { S.pair = b.dataset.pair; saveUi(); render(); }
   else if (b.dataset.acc) { S.acc = b.dataset.acc; saveUi(); render(); }
   else if (b.dataset.curve) { S.curve = b.dataset.curve; saveUi(); render(); }
+  else if (b.dataset.unit) { S.unit = b.dataset.unit; saveUi(); render(); }
   else if (b.dataset.if) { S.ideaF = b.dataset.if; saveUi(); render(); }
   else if (b.dataset.day) { S.calSel = S.calSel === b.dataset.day ? null : b.dataset.day; render(); }
   else if (b.dataset.trade) { if (!sheet.classList.contains("hidden")) { closeSheet(); setTimeout(() => openTrade(b.dataset.trade), 300); } else openTrade(b.dataset.trade); }
