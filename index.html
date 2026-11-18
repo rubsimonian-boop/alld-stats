@@ -858,6 +858,9 @@ function openSettings() {
       Settings → Developer settings → Fine-grained tokens → Generate. Доступ — только к репозиторию этого приложения, Contents: Read and write. Вставь его сюда.</div>
       <input class="field" id="tokIn" type="password" placeholder="github_pat_…" value="${esc(tok)}" autocomplete="off">
       <button class="btn" id="tokSave">Сохранить ключ</button><div class="hint" id="tokHint">${esc(SYNC)}</div></div>
+    <div class="card"><h3>Без интернета</h3>
+      <div class="hint" style="margin:0 0 10px">Статистика, сделки и идеи работают без сети всегда: показываю последнее сохранённое. Скрины без сети открываются только те, что уже смотрел, — или скачай все сразу.</div>
+      <button class="btn ghost" id="offBtn">Скачать все скрины</button><div class="hint" id="offHint"></div></div>
     <button class="btn ghost" id="refreshBtn">Обновить данные</button>
     <button class="btn ghost" id="logoutBtn" style="color:var(--bad)">Выйти на этом телефоне</button>`);
   sheetBody.querySelectorAll("[data-accname]").forEach(inp => inp.onchange = () => {
@@ -868,6 +871,17 @@ function openSettings() {
     LS.set("as_tok", document.getElementById("tokIn").value.trim());
     document.getElementById("tokHint").textContent = "Проверяю…";
     await syncMarks(true); document.getElementById("tokHint").textContent = SYNC; render();
+  };
+  document.getElementById("offBtn").onclick = async () => {
+    const list = [...new Set(DATA.trades.concat(DATA.ideas).flatMap(x => (x.shots || []).map(s => s.f)))];
+    const hint = document.getElementById("offHint"), btn = document.getElementById("offBtn");
+    btn.disabled = true; let ok = 0, bad = 0;
+    for (let i = 0; i < list.length; i += 6) {
+      await Promise.all(list.slice(i, i + 6).map(f => fetch("s/" + f + ".bin").then(r => r.ok ? ok++ : bad++).catch(() => bad++)));
+      hint.textContent = `Скачано ${ok} из ${list.length}`;
+    }
+    hint.textContent = bad ? `Скачано ${ok} из ${list.length}, ${bad} не вышло — нужна сеть` : `Готово: все ${ok} скринов есть без интернета`;
+    btn.disabled = false;
   };
   document.getElementById("refreshBtn").onclick = async () => { LS.del("as_h"); await loadData(); await syncMarks(false); closeSheet(); render(); };
   document.getElementById("logoutBtn").onclick = () => { ["as_key", "as_data", "as_h", "as_tok", "as_marks"].forEach(k => LS.del(k)); location.reload(); };
