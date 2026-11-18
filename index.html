@@ -320,7 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "9720982fdabb";
+const APPV = "584be9e88567";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -524,7 +524,8 @@ function pctLine(ts, short) {
   const accs = oneAcc() ? [oneAcc()] : (DATA.accounts || []).map(a => a.id);
   const parts = accs.map(a => [a, pctSum(ts, a)]).filter(x => x[1] != null);
   if (!parts.length) return "";
-  return parts.map(([a, p]) => `${accs.length > 1 && !short ? esc(accName(a)) + " " : ""}<span class="${cls(p)}">${fmtP(p)}</span>`).join(short ? " / " : " · ");
+  const abbr = n => (n.match(/[A-ZА-ЯЁ]/g) || [n[0]]).join("").slice(0, 3);
+  return parts.map(([a, p]) => `${parts.length > 1 ? esc(short ? abbr(accName(a)) : accName(a)) + " " : ""}<span class="${cls(p)}">${fmtP(p)}</span>`).join(" · ");
 }
 function pctDD(ts, a) { let g = 1, peak = 1, dd = 0; for (const t of ts) { const p = accPct(t, a); if (p == null) continue; g *= 1 + p / 100; peak = Math.max(peak, g); dd = Math.max(dd, 1 - g / peak); } return dd * 100; }
 function riskOf(t) {
