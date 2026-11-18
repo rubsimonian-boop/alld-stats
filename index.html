@@ -301,7 +301,7 @@ async function loadMeta(fresh) {
 async function loadData() {
   try {
     META = await loadMeta();
-    LS.set("as_meta", META);
+    LS.set("as_meta", META); repoFromMeta();
     if (LS.get("as_h") !== META.h || !LS.get("as_data")) {
       const raw = await openBox(await getBin("d.bin", true));
       DATA = JSON.parse(new TextDecoder().decode(raw));
@@ -309,17 +309,20 @@ async function loadData() {
     } else DATA = LS.get("as_data", DATA);
     NET = true;
   } catch (e) {
-    META = LS.get("as_meta", null); DATA = LS.get("as_data", DATA); NET = false;
+    META = LS.get("as_meta", null); DATA = LS.get("as_data", DATA); NET = false; repoFromMeta();
   }
 }
 let NET = true;
 
 /* marks («по системе»): local first, synced through GitHub API when a token is set */
-const REPO = (() => {
+let REPO = (() => {
   const m = location.hostname.match(/^([^.]+)\.github\.io$/);
   const p = location.pathname.split("/").filter(Boolean)[0];
   return m && p ? { owner: m[1], name: p } : null;
 })();
+function repoFromMeta() {  // the PC window is on 127.0.0.1: the repository for marks comes from meta.json
+  if (!REPO && META && META.repo && META.repo.includes("/")) { const [owner, name] = META.repo.split("/"); REPO = { owner, name }; }
+}
 let SYNC = "";
 async function remoteMarks() {
   const tok = LS.get("as_tok", "");
