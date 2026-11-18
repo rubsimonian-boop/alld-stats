@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#121211">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -42,7 +42,7 @@
   --shadow: none;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; background: var(--bg); color: var(--text); }
+html, body { margin: 0; background: var(--bg); color: var(--text); touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; }
 body {
   font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   font-variant-numeric: tabular-nums; min-height: 100vh;
@@ -175,8 +175,8 @@ textarea.note { width: 100%; min-height: 70px; border-radius: 12px; border: 1px 
 .shot { background: var(--surface-2); border-radius: 12px; overflow: hidden; }
 .shot .cap { font-size: 12px; color: var(--text-2); padding: 6px 10px; }
 .shot img { display: block; width: 100%; min-height: 120px; background: var(--surface-2); }
-.viewer { position: fixed; inset: 0; z-index: 60; background: #000; overflow: auto; display: flex; align-items: center; }
-.viewer img { width: 100%; height: auto; }
+.viewer { position: fixed; inset: 0; z-index: 60; background: #000; overflow: hidden; display: flex; align-items: center; touch-action: none; }
+.viewer img { width: 100%; height: auto; transform-origin: 0 0; will-change: transform; user-select: none; -webkit-user-drag: none; }
 .viewer button { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 12px; width: 40px; height: 40px; border-radius: 20px; background: rgba(255,255,255,.18); color: #fff; font-size: 22px; }
 
 /* tab bar */
@@ -744,7 +744,57 @@ async function loadShots(root) {
     } catch (e) { img.alt = "Скрин недоступен без сети"; img.style.minHeight = "40px"; }
   }
 }
-function openViewer(src) { document.getElementById("viewerImg").src = src; document.getElementById("viewer").classList.remove("hidden"); history.pushState({ viewer: 1 }, ""); }
+function openViewer(src) { resetViewer(); document.getElementById("viewerImg").src = src; document.getElementById("viewer").classList.remove("hidden"); history.pushState({ viewer: 1 }, ""); }
+/* no page zoom (two fingers / double tap); the screenshot viewer has its own pinch-zoom */
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("gesturechange", e => e.preventDefault());
+document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+let lastTouchEnd = 0;
+document.addEventListener("touchend", e => { const n = Date.now(); if (n - lastTouchEnd < 300 && !e.target.closest("#viewer")) e.preventDefault(); lastTouchEnd = n; }, { passive: false });
+const resetViewer = (() => {
+  const vw = document.getElementById("viewer"), img = document.getElementById("viewerImg");
+  const pts = new Map();
+  let s = 1, x = 0, y = 0, st = null, lastTap = 0;
+  const apply = () => { img.style.transform = `translate(${x}px, ${y}px) scale(${s})`; };
+  const clamp = () => {
+    if (s <= 1) { s = 1; x = 0; y = 0; return; }
+    const W = vw.clientWidth, H = vw.clientHeight, w = img.offsetWidth * s, h = img.offsetHeight * s, L = img.offsetLeft, T = img.offsetTop;
+    x = Math.min(-L, Math.max(W - L - w, x));
+    y = h <= H ? (H - h) / 2 - T : Math.min(-T, Math.max(H - T - h, y));
+  };
+  const snap = () => {
+    const a = [...pts.values()];
+    const c = a.length > 1 ? { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) } : { x: a[0].x, y: a[0].y, d: 0 };
+    return Object.assign(c, { s, x0: x, y0: y });
+  };
+  vw.addEventListener("pointerdown", e => {
+    if (e.target.closest("button")) return;
+    vw.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); st = snap();
+    if (pts.size === 1) {
+      const now = Date.now();
+      if (now - lastTap < 300) {  // double tap: zoom in at the finger / back out
+        if (s > 1) s = 1; else { const q = { x: (e.clientX - img.offsetLeft - x) / s, y: (e.clientY - img.offsetTop - y) / s }; s = 2.5; x = e.clientX - img.offsetLeft - s * q.x; y = e.clientY - img.offsetTop - s * q.y; }
+        clamp(); apply(); lastTap = 0; return;
+      }
+      lastTap = now;
+    }
+  });
+  vw.addEventListener("pointermove", e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const c = snap();
+    if (pts.size > 1 && st.d) {
+      const ns = Math.min(6, Math.max(1, st.s * c.d / st.d));
+      const qx = (st.x - img.offsetLeft - st.x0) / st.s, qy = (st.y - img.offsetTop - st.y0) / st.s;
+      s = ns; x = c.x - img.offsetLeft - s * qx; y = c.y - img.offsetTop - s * qy;
+    } else if (s > 1) { x = st.x0 + (c.x - st.x); y = st.y0 + (c.y - st.y); }
+    clamp(); apply();
+  });
+  const up = e => { pts.delete(e.pointerId); if (pts.size) st = snap(); clamp(); apply(); };
+  vw.addEventListener("pointerup", up); vw.addEventListener("pointercancel", up);
+  return () => { pts.clear(); s = 1; x = 0; y = 0; apply(); };
+})();
 function closeViewer(fromPop) { document.getElementById("viewer").classList.add("hidden"); if (!fromPop) history.back(); }
 document.getElementById("viewerX").onclick = () => closeViewer();
 

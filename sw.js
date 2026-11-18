@@ -1,5 +1,5 @@
 // Alld Stats: works offline. Shell and data — network first, then cache; screenshots — cache first.
-const C = "alld-stats-v1";
+const C = "alld-stats-v2";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(C).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {
@@ -19,7 +19,7 @@ self.addEventListener("fetch", e => {
     }));
     return;
   }
-  e.respondWith(fetch(e.request).then(r => {
+  e.respondWith(fetch(e.request.url, { cache: "no-cache" }).then(r => {  // always ask the server (ETag), cache only when offline
     if (r.ok) caches.open(C).then(c => c.put(key, r.clone()));
     return r;
   }).catch(() => caches.match(key).then(h => h || caches.match(u.origin + u.pathname.replace(/[^/]*$/, "index.html")))));
