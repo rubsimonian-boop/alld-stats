@@ -320,7 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "5a84a4a36288";
+const APPV = "2da0d4330059";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -1031,6 +1031,15 @@ function openIdea(id) {
   openSheet(h);
   loadShots(sheetBody);
 }
+function openArchive() {
+  /* screenshots without a trade: manual ones, closes of old records — by date, newest first */
+  const by = {}; for (const a of DATA.archive || []) (by[a.d || "без даты"] = by[a.d || "без даты"] || []).push(a);
+  const html = Object.keys(by).map(d => `<div class="card"><h3>${d === "без даты" ? d : dLong(d)}</h3><div class="shots">${by[d].map(a =>
+    `<div class="shot"><div class="cap">${esc(a.n)}</div><img data-f="${esc(a.f)}" alt="${esc(a.n)}" loading="lazy"></div>`).join("")}</div></div>`).join("");
+  openSheet(`<div class="shead"><div class="t">Архив скринов</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
+    <div class="hint" style="margin:0 0 12px">Скрины, которые не привязаны к сделке. Оригиналы на компьютере не хранятся — только здесь.</div>${html}`);
+  loadShots(sheetBody);
+}
 function openSettings() {
   const tok = LS.get("as_tok", "");
   openSheet(`<div class="shead"><div class="t">Настройки</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
@@ -1045,14 +1054,17 @@ function openSettings() {
     <div class="card"><h3>Без интернета</h3>
       <div class="hint" style="margin:0 0 10px">Статистика, сделки и идеи работают без сети всегда: показываю последнее сохранённое. Скрины без сети открываются только те, что уже смотрел, — или скачай все сразу.</div>
       <button class="btn ghost" id="offBtn">Скачать все скрины</button><div class="hint" id="offHint"></div></div>
+    ${(DATA.archive || []).length ? `<button class="btn ghost" id="arcBtn">Архив скринов (${DATA.archive.length})</button>` : ""}
     <button class="btn ghost" id="refreshBtn">Обновить данные</button>
     <button class="btn ghost" id="logoutBtn" style="color:var(--bad)">Выйти на этом устройстве</button>`);
   sheetBody.querySelectorAll("[data-accname]").forEach(inp => inp.onchange = () => {
     const id = inp.dataset.accname, a = DATA.accounts.find(x => x.id === id), v = inp.value.trim();
     setMark("_acc_" + id, { n: v && v !== a.name ? v : "" }); render();
   });
+  const arc = document.getElementById("arcBtn");
+  if (arc) arc.onclick = () => { closeSheet(); setTimeout(openArchive, 300); };
   document.getElementById("offBtn").onclick = async () => {
-    const list = [...new Set(DATA.trades.concat(DATA.ideas).flatMap(x => (x.shots || []).map(s => s.f)))];
+    const list = [...new Set(DATA.trades.concat(DATA.ideas).flatMap(x => (x.shots || []).map(s => s.f)).concat((DATA.archive || []).map(a => a.f)))];
     const hint = document.getElementById("offHint"), btn = document.getElementById("offBtn");
     btn.disabled = true; let ok = 0, bad = 0;
     for (let i = 0; i < list.length; i += 6) {
