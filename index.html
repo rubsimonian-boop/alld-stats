@@ -320,6 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
+const APPV = "__APPV__";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -355,6 +356,7 @@ async function getBin(path, fresh) {
 let DATA = { trades: [], ideas: [] }, META = null, MARKS = LS.get("as_marks", {});
 const S = Object.assign({ tab: "home", curve: "m", mode: "week", anchor: null, pair: "all", acc: "all", calSel: null, ideaF: "no" }, LS.get("as_ui", {}));
 if (!["home", "stats", "trades", "ideas"].includes(S.tab)) S.tab = "home";
+if (S.acc === "none") S.acc = "all";
 function saveUi() { LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit }); }
 
 async function loadMeta(fresh) {
@@ -366,6 +368,9 @@ async function loadData() {
   try {
     META = await loadMeta();
     LS.set("as_meta", META); repoFromMeta();
+    if (META.app && META.app !== APPV && APPV !== "__APP" + "V__" && sessionStorage.getItem("as_rl") !== META.app) {
+      sessionStorage.setItem("as_rl", META.app); location.reload(); return;
+    }
     if (LS.get("as_h") !== META.h || !LS.get("as_data")) {
       const raw = await openBox(await getBin("d.bin", true));
       DATA = JSON.parse(new TextDecoder().decode(raw));
@@ -502,7 +507,7 @@ function periodLabel(mode, a) {
 }
 function pairOk(t) {
   return (S.pair === "all" || t.pair === S.pair)
-    && (S.acc === "all" || (S.acc === "none" ? !(t.accs && t.accs.length) : (t.accs || []).some(x => x.a === S.acc)));
+    && (S.acc === "all" || (t.accs || []).some(x => x.a === S.acc));
 }
 function accName(id) { const m = MARKS["_acc_" + id]; if (m && m.n) return m.n; const a = (DATA.accounts || []).find(x => x.id === id); return a ? a.name : id; }
 /* % of the account: each trade has its own % per account (profit / balance before, from MT5 history).
@@ -710,11 +715,9 @@ function viewOverview() {
   const eq = equityChart(ts, bars ? 0.5 : 1);
   h += `<div class="${eq && bars ? "grid2" : ""}">${eq ? `<div class="card"><h3>Рост R по сделкам</h3>${eq}</div>` : ""}${bars ? `<div class="card"><h3>${bk.title}</h3>${bars}</div>` : ""}</div>`;
   h += `<div class="grid3">`;
-  const sysG = [["По системе ✅", t => markOf(t.id) && markOf(t.id).s === 1], ["Не по системе ❌", t => markOf(t.id) && markOf(t.id).s === 0], ["Не отмечено", t => !markOf(t.id) || markOf(t.id).s == null]];
-  h += breakdown("По системе", sysG.map(([n, f]) => ({ name: n, ts: ts.filter(f) })));
   if (S.acc === "all" && (DATA.accounts || []).length)
     h += breakdown("Счета", DATA.accounts.map(a => ({ name: accName(a.id), ts: ts.filter(t => (t.accs || []).some(x => x.a === a.id)) }))
-      .concat([{ name: "Без счёта", ts: ts.filter(t => !(t.accs && t.accs.length)) }]));
+    );
   if (S.pair === "all") h += breakdown("Пары", ["EURUSD", "GBPUSD", "XAUUSD"].map(p => ({ name: p, ts: ts.filter(t => t.pair === p) })));
   h += breakdown("Сессии", ["Лондон", "Нью-Йорк", "вне окна", "нет времени"].map(n => ({ name: n === "нет времени" ? "Без времени" : n[0].toUpperCase() + n.slice(1), ts: ts.filter(t => session(t) === n) })));
   if (S.mode !== "day") h += breakdown("Дни недели", DOW.slice(0, 5).map((n, i) => ({ name: n, ts: ts.filter(t => dowIdx(t.date) === i) })));
@@ -741,12 +744,10 @@ function buckets(mode, a, ts) {
   return null;
 }
 function tradeRow(t) {
-  const m = markOf(t.id);
-  const mk = m && m.s === 1 ? "✅" : m && m.s === 0 ? "❌" : "";
   const acc = S.acc === "all" && t.accs && t.accs.length ? t.accs.map(x => accName(x.a)).join(" + ") : "";
   const l2 = [t.time ? t.time + (t.ctime ? "→" + t.ctime : "") : dLabel(t.date), session(t) !== "нет времени" ? session(t) : "", t.reason || (t.open ? "открыта" : ""), riskOf(t) ? "риск " + riskOf(t) : "", acc].filter(Boolean).join(" · ");
-  return `<button class="item" data-trade="${esc(t.id)}"><div class="main"><div class="l1">${t.pair} <span class="badge">${sideRu(t.side)}</span>${mk ? `<span class="mk">${mk}</span>` : ""}</div>
-    <div class="l2">${esc(l2)}</div></div><div class="rv ${cls(t.r)}">${t.open ? "…" : fmtR(t.r)}${oneAcc() && accPct(t, oneAcc()) != null ? `<small class="${cls(accPct(t, oneAcc()))}">${fmtP(accPct(t, oneAcc()))}</small>` : t.num ? `<small>№${t.num}</small>` : ""}</div></button>`;
+  return `<button class="item" data-trade="${esc(t.id)}"><div class="main"><div class="l1">${t.pair} <span class="badge">${sideRu(t.side)}</span></div>
+    <div class="l2">${esc(l2)}</div></div><div class="rv ${cls(t.r)}">${t.open ? "…" : fmtR(t.r)}${pctLine([t], true) ? `<small style="font-weight:600">${pctLine([t], true)}</small>` : t.num ? `<small>№${t.num}</small>` : ""}</div></button>`;
 }
 function tradeList(ts, flat) {
   if (!ts.length) return `<div class="empty">Нет сделок</div>`;
@@ -964,7 +965,6 @@ document.getElementById("viewerX").onclick = () => closeViewer();
 
 function openTrade(id) {
   const t = DATA.trades.find(x => x.id === id); if (!t) return;
-  const m = markOf(t.id) || {};
   const kv = [["Направление", sideRu(t.side)], ["Сессия", session(t) === "нет времени" ? "—" : session(t)],
     ["Вход", t.time ? `${dLabel(t.date)} ${t.time}` : dLabel(t.date)], ["Выход", t.ctime ? `${t.cdate && t.cdate !== t.date ? dLabel(t.cdate) + " " : ""}${t.ctime}` : (t.open ? "открыта" : "—")],
     ["Закрыта", t.reason || "—"], ["Длительность", duration(t) || "—"], ["Номер", t.num ? "Trade№" + t.num : "—"],
@@ -976,24 +976,13 @@ function openTrade(id) {
     <div class="card"><div class="big ${cls(t.r)}" style="font-size:40px;font-weight:700;letter-spacing:-.03em">${t.open ? "открыта" : fmtR(t.r)}</div>${pctHtml}
     <div class="kv" style="margin-top:14px">${kv.map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`).join("")}</div>
     ${t.flags ? `<div class="hint">${esc(t.flags.join(" · "))}</div>` : ""}</div>
-    <div class="card"><h3>По системе?</h3><div class="marks">
-      <button class="yes ${m.s === 1 ? "on" : ""}" data-mark="1">✅ По системе</button><button class="no ${m.s === 0 ? "on" : ""}" data-mark="0">❌ Не по системе</button></div>
-      <textarea class="note" id="markNote" placeholder="Почему (по желанию)">${esc(m.n || "")}</textarea>
-      <div class="hint" id="syncHint">${esc(SYNC)}</div></div>`;
+`;
   if (t.idea) h += `<div class="card"><h3>Объяснение</h3><div class="text">${esc(t.idea)}</div></div>`;
   if (t.changes) h += `<div class="card"><h3>Изменения</h3>${t.changes.map(c => `<div class="text" style="margin-bottom:8px">${esc(c)}</div>`).join("")}</div>`;
   if (t.lesson) h += `<div class="card"><h3>Урок</h3><div class="text">${esc(t.lesson)}</div></div>`;
   h += shotsHtml(t.shots, ["Вход", "Разворот", "Выход"]);
   if (!t.shots.length && t.src === "n") h += `<div class="status">Старая сделка из Notion — скринов здесь нет</div>`;
   openSheet(h);
-  sheetBody.querySelectorAll("[data-mark]").forEach(b => b.onclick = () => {
-    const v = +b.dataset.mark, cur = markOf(t.id) || {};
-    setMark(t.id, { s: cur.s === v ? null : v });
-    sheetBody.querySelectorAll("[data-mark]").forEach(x => x.classList.toggle("on", markOf(t.id) && markOf(t.id).s === +x.dataset.mark));
-    document.getElementById("syncHint").textContent = "Сохраняю…";
-  });
-  const note = document.getElementById("markNote");
-  note.oninput = () => { clearTimeout(note.tm); note.tm = setTimeout(() => setMark(t.id, { n: note.value.trim() }), 600); };
   loadShots(sheetBody);
 }
 function openIdea(id) {
@@ -1019,11 +1008,6 @@ function openSettings() {
       <div class="hint" style="margin:0 0 10px">Названия счетов в приложении. Сделки разносятся по счетам сами: робот знает, на каком счёте был вход.</div>
       ${DATA.accounts.map(a => `<div class="set-row" style="align-items:center"><span>${esc(a.name)}<br><small style="color:var(--text-3)">№ …${esc(a.id.slice(-4))}</small></span>
         <input class="field" style="height:38px;max-width:180px" data-accname="${esc(a.id)}" value="${esc(accName(a.id))}"></div>`).join("")}</div>` : ""}
-    <div class="card"><h3>Отметки «по системе» на всех устройствах</h3>
-      <div class="hint" style="margin:0 0 10px">Без ключа отметки хранятся только на этом устройстве. Чтобы они сохранялись в приложении, создай на GitHub ключ:
-      Settings → Developer settings → Fine-grained tokens → Generate. Доступ — только к репозиторию этого приложения, Contents: Read and write. Вставь его сюда.</div>
-      <input class="field" id="tokIn" type="password" placeholder="github_pat_…" value="${esc(tok)}" autocomplete="off">
-      <button class="btn" id="tokSave">Сохранить ключ</button><div class="hint" id="tokHint">${esc(SYNC)}</div></div>
     <div class="card"><h3>Без интернета</h3>
       <div class="hint" style="margin:0 0 10px">Статистика, сделки и идеи работают без сети всегда: показываю последнее сохранённое. Скрины без сети открываются только те, что уже смотрел, — или скачай все сразу.</div>
       <button class="btn ghost" id="offBtn">Скачать все скрины</button><div class="hint" id="offHint"></div></div>
@@ -1033,11 +1017,6 @@ function openSettings() {
     const id = inp.dataset.accname, a = DATA.accounts.find(x => x.id === id), v = inp.value.trim();
     setMark("_acc_" + id, { n: v && v !== a.name ? v : "" }); render();
   });
-  document.getElementById("tokSave").onclick = async () => {
-    LS.set("as_tok", document.getElementById("tokIn").value.trim());
-    document.getElementById("tokHint").textContent = "Проверяю…";
-    await syncMarks(true); document.getElementById("tokHint").textContent = SYNC; render();
-  };
   document.getElementById("offBtn").onclick = async () => {
     const list = [...new Set(DATA.trades.concat(DATA.ideas).flatMap(x => (x.shots || []).map(s => s.f)))];
     const hint = document.getElementById("offHint"), btn = document.getElementById("offBtn");
@@ -1079,7 +1058,7 @@ function render() {
   const accs = DATA.accounts || [];
   document.getElementById("pairChips").innerHTML = pairs.map(p => `<button class="chip ${S.pair === p ? "on" : ""}" data-pair="${p}">${p === "all" ? "Все пары" : p}</button>`).join("");
   document.getElementById("accChips").classList.toggle("hidden", !accs.length || S.tab === "ideas");
-  document.getElementById("accChips").innerHTML = [["all", "Все счета"]].concat(accs.map(a => [a.id, accName(a.id)]), [["none", "Без счёта"]])
+  document.getElementById("accChips").innerHTML = [["all", "Все счета"]].concat(accs.map(a => [a.id, accName(a.id)]))
     .map(([k, n]) => `<button class="chip ${S.acc === k ? "on" : ""}" data-acc="${esc(k)}">${esc(n)}</button>`).join("");
   const v = document.getElementById("view");
   v.innerHTML = (S.tab === "home" ? viewHome() : S.tab === "stats" ? viewOverview() : S.tab === "trades" ? viewTrades() : viewIdeas())
