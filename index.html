@@ -320,7 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "e4244a27a7ae";
+const APPV = "5a84a4a36288";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -872,7 +872,7 @@ function reconCard(ts) {
     const m = rc[a], ok = m.in_app >= m.positions;
     const moves = (m.moves || []).filter(x => !S.anchor || true);
     const mv = !m.has_balance ? `<div class="hint">Пополнения и выводы появятся после перезапуска сервиса TradeJournal в MT5</div>`
-      : moves.length ? `<div class="hint">${moves.map(x => `${dLabel(x.date)} ${x.kind} ${x.pct > 0 ? "+" : "−"}${Math.abs(x.pct)}% — не считается в прибыль`).join("<br>")}</div>`
+      : moves.length ? `<div class="hint">${moves.map(x => x.pct == null ? `${dLabel(x.date)} — ${x.kind}` : `${dLabel(x.date)} ${x.kind} ${x.pct > 0 ? "+" : "−"}${Math.abs(x.pct)}% к счёту — не считается в прибыль`).join("<br>")}</div>`
       : `<div class="hint">Пополнений и выводов не было</div>`;
     const p = pctSum(ts, a);
     return `<div class="set-row" style="display:block"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(accName(a))}</b>
