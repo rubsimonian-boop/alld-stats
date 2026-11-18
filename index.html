@@ -215,7 +215,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <div id="lock" class="lock hidden">
   <div class="box">
     <h1>Alld Stats</h1>
-    <p>Статистика сделок. Введи пароль — он нужен один раз на этом телефоне.</p>
+    <p>Статистика сделок. Введи пароль — он нужен один раз на этом устройстве.</p>
     <form id="lockForm" autocomplete="off">
       <input id="pw" class="field" type="password" placeholder="Пароль" autocomplete="current-password">
       <button class="btn" type="submit" id="pwBtn">Открыть</button>
@@ -357,7 +357,7 @@ async function syncMarks(push) {
         { method: "PUT", headers: { Authorization: "Bearer " + tok, Accept: "application/vnd.github+json" }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error("GitHub " + r.status);
       SYNC = "Отметки сохранены";
-    } else SYNC = (REPO && tok) ? "Отметки синхронизированы" : (dirty ? "Отметки только на этом телефоне" : "");
+    } else SYNC = (REPO && tok) ? "Отметки синхронизированы" : (dirty ? "Отметки только на этом устройстве" : "");
   } catch (e) { SYNC = "Отметки не синхронизированы: " + e.message; }
 }
 function setMark(id, patch) {
@@ -857,7 +857,7 @@ function openSettings() {
       ${DATA.accounts.map(a => `<div class="set-row" style="align-items:center"><span>${esc(a.name)}<br><small style="color:var(--text-3)">№ …${esc(a.id.slice(-4))}</small></span>
         <input class="field" style="height:38px;max-width:180px" data-accname="${esc(a.id)}" value="${esc(accName(a.id))}"></div>`).join("")}</div>` : ""}
     <div class="card"><h3>Отметки «по системе» на всех устройствах</h3>
-      <div class="hint" style="margin:0 0 10px">Без ключа отметки хранятся только на этом телефоне. Чтобы они сохранялись в приложении, создай на GitHub ключ:
+      <div class="hint" style="margin:0 0 10px">Без ключа отметки хранятся только на этом устройстве. Чтобы они сохранялись в приложении, создай на GitHub ключ:
       Settings → Developer settings → Fine-grained tokens → Generate. Доступ — только к репозиторию этого приложения, Contents: Read and write. Вставь его сюда.</div>
       <input class="field" id="tokIn" type="password" placeholder="github_pat_…" value="${esc(tok)}" autocomplete="off">
       <button class="btn" id="tokSave">Сохранить ключ</button><div class="hint" id="tokHint">${esc(SYNC)}</div></div>
@@ -865,7 +865,7 @@ function openSettings() {
       <div class="hint" style="margin:0 0 10px">Статистика, сделки и идеи работают без сети всегда: показываю последнее сохранённое. Скрины без сети открываются только те, что уже смотрел, — или скачай все сразу.</div>
       <button class="btn ghost" id="offBtn">Скачать все скрины</button><div class="hint" id="offHint"></div></div>
     <button class="btn ghost" id="refreshBtn">Обновить данные</button>
-    <button class="btn ghost" id="logoutBtn" style="color:var(--bad)">Выйти на этом телефоне</button>`);
+    <button class="btn ghost" id="logoutBtn" style="color:var(--bad)">Выйти на этом устройстве</button>`);
   sheetBody.querySelectorAll("[data-accname]").forEach(inp => inp.onchange = () => {
     const id = inp.dataset.accname, a = DATA.accounts.find(x => x.id === id), v = inp.value.trim();
     setMark("_acc_" + id, { n: v && v !== a.name ? v : "" }); render();
