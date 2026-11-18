@@ -525,7 +525,7 @@ function pctDD(ts, a) { let g = 1, peak = 1, dd = 0; for (const t of ts) { const
 function riskOf(t) {
   if (t.accs && t.accs.some(x => x.risk != null)) {
     const list = S.acc !== "all" && S.acc !== "none" ? t.accs.filter(x => x.a === S.acc) : t.accs;
-    const r = list.filter(x => x.risk != null).map(x => x.risk + "%");
+    const r = list.filter(x => x.risk != null).map(x => (x.est ? "≈" : "") + x.risk + "%");
     return r.length ? r.join(" / ") : null;
   }
   return t.risk || null;
@@ -782,7 +782,7 @@ function viewCalendar() {
       d = addDays(d, 1);
     }
     const ws = stats(wk);
-    h += `<div class="wk ${wk.length ? cls(ws.sum) : ""}">${wk.length ? fmtR(ws.sum) + `<small>${ws.n} сд.</small>` : ""}</div>`;
+    h += `<div class="wk ${wk.length ? cls(ws.sum) : ""}">${wk.length ? fmtR(ws.sum) + `<small>${oneAcc() && pctSum(wk, oneAcc()) != null ? fmtP(pctSum(wk, oneAcc())) : ws.n + " сд."}</small>` : ""}</div>`;
   }
   h += `</div></div>`;
   const ms = stats(ts.filter(t => { const x = pd(t.date); return x.getFullYear() === y && x.getMonth() === mo; }));
