@@ -320,7 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "584be9e88567";
+const APPV = "e4244a27a7ae";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -480,6 +480,18 @@ const dLong = s => { const d = pd(s); return `${DOW[(d.getDay() + 6) % 7]}, ${d.
 
 /* ============================================================ period */
 const MODES = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"], ["year", "Год"], ["all", "Всё"]];
+/* the chosen account sees its own R (its fill and stop); «Все счета» — R of the journal record */
+let _tr = null, _trKey = "";
+function TR() {
+  const a = oneAcc(), key = (a || "") + "|" + DATA.trades.length + "|" + (META && META.h);
+  if (_tr && _trKey === key) return _tr;
+  _trKey = key;
+  _tr = !a ? DATA.trades : DATA.trades.map(t => {
+    const x = (t.accs || []).find(y => y.a === a);
+    return x && x.r != null && x.r !== t.r ? Object.assign({}, t, { r: x.r, rj: t.r }) : t;
+  });
+  return _tr;
+}
 function lastDate() { const ts = DATA.trades; return ts.length ? ts[ts.length - 1].date : iso(new Date()); }
 function anchor() { return S.anchor ? pd(S.anchor) : new Date(new Date().setHours(0, 0, 0, 0)); }
 function range(mode, a) {
@@ -536,7 +548,7 @@ function riskOf(t) {
   }
   return t.risk || null;
 }
-function inPeriod(mode, a) { const [f, t] = range(mode, a); return DATA.trades.filter(x => x.date >= f && x.date <= t && pairOk(x)); }
+function inPeriod(mode, a) { const [f, t] = range(mode, a); return TR().filter(x => x.date >= f && x.date <= t && pairOk(x)); }
 
 /* ============================================================ stats */
 function stats(ts) {
@@ -715,6 +727,7 @@ function viewOverview() {
   const bars = bk && barsChart(bk.items, 0.5);
   const eq = equityChart(ts, bars ? 0.5 : 1);
   h += `<div class="${eq && bars ? "grid2" : ""}">${eq ? `<div class="card"><h3>Рост R по сделкам</h3>${eq}</div>` : ""}${bars ? `<div class="card"><h3>${bk.title}</h3>${bars}</div>` : ""}</div>`;
+  h += reconCard(ts);
   h += `<div class="grid3">`;
   if (S.acc === "all" && (DATA.accounts || []).length)
     h += breakdown("Счета", DATA.accounts.map(a => ({ name: accName(a.id), ts: ts.filter(t => (t.accs || []).some(x => x.a === a.id)) }))
@@ -768,7 +781,7 @@ function viewCalendar() {
   const a = anchor(), y = a.getFullYear(), mo = a.getMonth();
   const first = new Date(y, mo, 1), last = new Date(y, mo + 1, 0);
   let d = monday(first);
-  const ts = DATA.trades.filter(pairOk);
+  const ts = TR().filter(pairOk);
   const byDay = {}; for (const t of ts) (byDay[t.date] = byDay[t.date] || []).push(t);
   const maxAbs = Math.max(1, ...Object.values(byDay).map(x => Math.abs(stats(x).sum)));
   let h = `<div class="card"><div class="cal">${DOW.map(x => `<div class="dow">${x}</div>`).join("")}<div class="dow">Нед.</div>`;
@@ -795,7 +808,7 @@ function viewCalendar() {
 }
 function viewHome() {
   const now = new Date(), today = iso(now);
-  const ts = DATA.trades.filter(pairOk);
+  const ts = TR().filter(pairOk);
   const tdy = ts.filter(t => t.date === today), s = stats(tdy);
   const prevDay = ts.filter(t => t.r != null && t.date < today).map(t => t.date).pop();
   const m0 = iso(monday(now)), m6 = iso(addDays(monday(now), 6));
@@ -850,6 +863,23 @@ function homeCurve(ts) {
       <div class="seg" style="flex:none;width:auto"><button class="${!inP ? "on" : ""}" data-unit="R" style="padding:0 12px">R</button><button class="${inP ? "on" : ""}" data-unit="%" style="padding:0 12px">%</button></div>
       <div class="seg" style="flex:none;width:auto">${CURVES.map(([k, n]) => `<button class="${c[0] === k ? "on" : ""}" data-curve="${k}" style="padding:0 10px">${n}</button>`).join("")}</div></div>
     </div><div style="margin-top:12px">${chart}</div></div>`;
+}
+function reconCard(ts) {
+  /* the app against the account itself (MT5 history): every position is here, deposits are not profit */
+  const rc = DATA.recon || {}, ids = oneAcc() ? [oneAcc()] : Object.keys(rc);
+  if (!ids.length) return "";
+  const rows = ids.filter(a => rc[a]).map(a => {
+    const m = rc[a], ok = m.in_app >= m.positions;
+    const moves = (m.moves || []).filter(x => !S.anchor || true);
+    const mv = !m.has_balance ? `<div class="hint">Пополнения и выводы появятся после перезапуска сервиса TradeJournal в MT5</div>`
+      : moves.length ? `<div class="hint">${moves.map(x => `${dLabel(x.date)} ${x.kind} ${x.pct > 0 ? "+" : "−"}${Math.abs(x.pct)}% — не считается в прибыль`).join("<br>")}</div>`
+      : `<div class="hint">Пополнений и выводов не было</div>`;
+    const p = pctSum(ts, a);
+    return `<div class="set-row" style="display:block"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(accName(a))}</b>
+      <span class="${ok ? "pos" : "neg"}">${ok ? "✅ сходится" : "⚠️ не хватает " + (m.positions - m.in_app)}</span></div>
+      <div class="hint" style="margin-top:4px">Сделок в MT5: ${m.positions} · в приложении: ${m.in_app}${p != null ? ` · за период ${fmtP(p)} к счёту` : ""}</div>${mv}</div>`;
+  }).join("");
+  return rows ? `<div class="card"><h3>Сверка со счётом</h3>${rows}</div>` : "";
 }
 function viewIdeas() {
   const all = DATA.ideas.filter(i => S.pair === "all" || i.pair === S.pair).slice().reverse();
@@ -965,7 +995,7 @@ function closeViewer(fromPop) { document.getElementById("viewer").classList.add(
 document.getElementById("viewerX").onclick = () => closeViewer();
 
 function openTrade(id) {
-  const t = DATA.trades.find(x => x.id === id); if (!t) return;
+  const t = TR().find(x => x.id === id); if (!t) return;
   const kv = [["Направление", sideRu(t.side)], ["Сессия", session(t) === "нет времени" ? "—" : session(t)],
     ["Вход", t.time ? `${dLabel(t.date)} ${t.time}` : dLabel(t.date)], ["Выход", t.ctime ? `${t.cdate && t.cdate !== t.date ? dLabel(t.cdate) + " " : ""}${t.ctime}` : (t.open ? "открыта" : "—")],
     ["Закрыта", t.reason || "—"], ["Длительность", duration(t) || "—"], ["Номер", t.num ? "Trade№" + t.num : "—"],
@@ -976,6 +1006,8 @@ function openTrade(id) {
   let h = `<div class="shead"><div class="t">${t.pair} · ${dLong(t.date)}</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
     <div class="card"><div class="big ${cls(t.r)}" style="font-size:40px;font-weight:700;letter-spacing:-.03em">${t.open ? "открыта" : fmtR(t.r)}</div>${pctHtml}
     <div class="kv" style="margin-top:14px">${kv.map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`).join("")}</div>
+    ${t.rj != null ? `<div class="hint">На этом счёте ${fmtR(t.r)}, в журнале ${fmtR(t.rj)} — свой вход и стоп</div>` : ""}
+    ${(t.accs || []).length > 1 && !oneAcc() ? `<div class="hint">R по счетам: ${t.accs.map(x => esc(accName(x.a)) + " " + fmtR(x.r)).join(" · ")}</div>` : ""}
     ${t.flags ? `<div class="hint">${esc(t.flags.join(" · "))}</div>` : ""}</div>
 `;
   if (t.idea) h += `<div class="card"><h3>Объяснение</h3><div class="text">${esc(t.idea)}</div></div>`;
@@ -983,6 +1015,7 @@ function openTrade(id) {
   if (t.lesson) h += `<div class="card"><h3>Урок</h3><div class="text">${esc(t.lesson)}</div></div>`;
   h += shotsHtml(t.shots, ["Вход", "Разворот", "Выход"]);
   if (!t.shots.length && t.src === "n") h += `<div class="status">Старая сделка из Notion — скринов здесь нет</div>`;
+  if (t.src === "h") h += `<div class="status">Сделка из истории MT5 — в журнале её нет, скринов нет</div>`;
   openSheet(h);
   loadShots(sheetBody);
 }
