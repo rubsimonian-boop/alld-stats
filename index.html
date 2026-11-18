@@ -235,7 +235,9 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
   #accChips { margin-top: 0 !important; }
   main { padding-top: 18px; padding-bottom: 32px; }
   .card { padding: 18px 20px; }
-  .cols-home { display: grid; grid-template-columns: minmax(340px, 400px) 1fr; gap: 16px; align-items: start; }
+  .cols-home { display: grid; grid-template-columns: 400px 1fr; grid-template-areas: "today curve" "cal cal"; gap: 16px; }
+  .a-today { grid-area: today; } .a-curve { grid-area: curve; } .a-cal { grid-area: cal; }
+  .a-today > .card, .a-curve > .card { height: 100%; margin-bottom: 0; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .grid3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; align-items: start; }
   .grid2 > .card, .grid3 > .card { margin-bottom: 0; }
@@ -343,9 +345,9 @@ async function getBin(path, fresh) {
 
 /* ============================================================ data */
 let DATA = { trades: [], ideas: [] }, META = null, MARKS = LS.get("as_marks", {});
-const S = Object.assign({ tab: "home", mode: "week", anchor: null, pair: "all", acc: "all", calSel: null, ideaF: "no" }, LS.get("as_ui", {}));
+const S = Object.assign({ tab: "home", curve: "m", mode: "week", anchor: null, pair: "all", acc: "all", calSel: null, ideaF: "no" }, LS.get("as_ui", {}));
 if (!["home", "stats", "trades", "ideas"].includes(S.tab)) S.tab = "home";
-function saveUi() { LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF }); }
+function saveUi() { LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve }); }
 
 async function loadMeta(fresh) {
   const r = await fetch("meta.json?t=" + Date.now(), { cache: "no-store" });
@@ -529,26 +531,56 @@ const num = (v, d = 1) => v == null ? "—" : v === Infinity ? "∞" : (Math.rou
 /* ============================================================ charts (inline SVG) */
 let TIPS = [];
 function equityChart(ts, frac) {
+  /* per trade: x = trade number */
   const done = ts.filter(t => t.r != null);
   if (done.length < 2) return "";
+  let cum = 0;
+  const pts = [{ x: 0, c: 0, tip: "Начало периода" }].concat(done.map((t, i) => {
+    cum += t.r; return { x: (i + 1) / done.length, c: cum, tip: `<b>${fmtR(cum)}</b> всего<br>${dLabel(t.date)} · ${t.pair} · ${fmtR(t.r)}` };
+  }));
+  return curveChart(pts, frac, dLabel(done[0].date), dLabel(done[done.length - 1].date));
+}
+function smoothPath(P) {
+  /* monotone cubic through the points: a smooth curve that never overshoots a day */
+  const n = P.length;
+  if (n < 3) return "M" + P.map(p => p[0].toFixed(1) + " " + p[1].toFixed(1)).join("L");
+  const d = [], m = [];
+  for (let i = 0; i < n - 1; i++) d[i] = (P[i + 1][1] - P[i][1]) / ((P[i + 1][0] - P[i][0]) || 1e-6);
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b;
+    if (h > 9) { const t = 3 / Math.sqrt(h); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+  }
+  let out = `M${P[0][0].toFixed(1)} ${P[0][1].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = P[i + 1][0] - P[i][0];
+    out += `C${(P[i][0] + h / 3).toFixed(1)} ${(P[i][1] + m[i] * h / 3).toFixed(1)} ${(P[i + 1][0] - h / 3).toFixed(1)} ${(P[i + 1][1] - m[i + 1] * h / 3).toFixed(1)} ${P[i + 1][0].toFixed(1)} ${P[i + 1][1].toFixed(1)}`;
+  }
+  return out;
+}
+function curveChart(pts, frac, left, right, H0, Wabs) {
+  /* pts: [{x 0..1, c cumulative R, tip html}] */
   const id = "eq" + Math.random().toString(36).slice(2, 7);
-  const W = chartW(frac), H = DESK() ? 240 : 200, pl = 34, pr = 10, pt = 12, pb = 22;
-  let cum = 0; const pts = [{ c: 0 }].concat(done.map(t => ({ c: (cum += t.r), t })));
+  const W = Wabs ? Math.max(260, Wabs) : chartW(frac), H = H0 || (DESK() ? 240 : 200), pl = 34, pr = 10, pt = 12, pb = 22;
   const lo = Math.min(0, ...pts.map(p => p.c)), hi = Math.max(0, ...pts.map(p => p.c));
-  const span = hi - lo || 1, step = niceStep(span / 4);
-  const y0 = Math.floor(lo / step) * step, y1 = Math.ceil(hi / step) * step;
-  const X = i => pl + (W - pl - pr) * i / (pts.length - 1), Y = v => pt + (H - pt - pb) * (1 - (v - y0) / (y1 - y0 || 1));
+  const step = niceStep((hi - lo || 1) / 4);
+  const y0 = Math.floor(lo / step) * step, y1 = Math.ceil(hi / step) * step || step;
+  const X = x => pl + (W - pl - pr) * x, Y = v => pt + (H - pt - pb) * (1 - (v - y0) / (y1 - y0 || 1));
   let g = "";
   for (let v = y0; v <= y1 + 1e-9; v += step) g += `<line class="${Math.abs(v) < 1e-9 ? "zero-line" : "grid"}" x1="${pl}" x2="${W - pr}" y1="${Y(v)}" y2="${Y(v)}"/><text class="axis" x="${pl - 6}" y="${Y(v) + 4}" text-anchor="end">${fmtR(v).replace("R", "")}</text>`;
-  const d = pts.map((p, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(p.c).toFixed(1)).join("");
-  const area = d + `L${X(pts.length - 1)} ${Y(0)}L${X(0)} ${Y(0)}Z`;
-  const first = done[0].date, last = done[done.length - 1].date;
-  const lbl = `<text class="axis" x="${pl}" y="${H - 4}">${dLabel(first)}</text><text class="axis" x="${W - pr}" y="${H - 4}" text-anchor="end">${dLabel(last)}</text>`;
-  TIPS.push({ id, kind: "eq", pts, X, Y, W, H });
+  const P = pts.map(p => [X(p.x), Y(p.c)]);
+  const d = smoothPath(P);
+  const area = d + `L${P[P.length - 1][0].toFixed(1)} ${Y(0)}L${P[0][0].toFixed(1)} ${Y(0)}Z`;
+  const last = pts[pts.length - 1].c, col = last >= 0 ? "--pos" : "--neg";
+  const lbl = `<text class="axis" x="${pl}" y="${H - 4}">${esc(left)}</text><text class="axis" x="${W - pr}" y="${H - 4}" text-anchor="end">${esc(right)}</text>`;
+  TIPS.push({ id, kind: "eq", pts, P, W, H });
   return `<div class="chart" id="${id}"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
-    ${g}<path d="${area}" fill="var(--pos-soft)" opacity=".6"/><path d="${d}" fill="none" stroke="var(--pos)" stroke-width="2" stroke-linejoin="round"/>
-    ${lbl}<line class="cross" opacity="0" stroke="var(--text-3)" stroke-width="1" y1="${pt}" y2="${H - pb}" x1="-10" x2="-10"/>
-    <circle class="dot" opacity="0" r="4" cx="-10" cy="-10" fill="var(--pos)" stroke="var(--surface)" stroke-width="2"/></svg><div class="tip"></div></div>`;
+    <defs><linearGradient id="g${id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(${col})" stop-opacity=".28"/><stop offset="1" stop-color="var(${col})" stop-opacity="0"/></linearGradient></defs>
+    ${g}<path d="${area}" fill="url(#g${id})"/><path d="${d}" fill="none" stroke="var(${col})" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${lbl}<line class="cross" opacity="0" stroke="var(--text-3)" stroke-width="1" y1="${pt}" y2="${H - pb}" x1="0" x2="0"/>
+    <circle class="dot" opacity="0" r="4.5" cx="0" cy="0" fill="var(${col})" stroke="var(--surface)" stroke-width="2"/></svg><div class="tip"></div></div>`;
 }
 const DESK = () => matchMedia("(min-width: 960px)").matches;
 function chartW(frac = 1) {
@@ -590,11 +622,12 @@ function wireTips() {
     const move = e => {
       const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * t.W / r.width;
       if (t.kind === "eq") {
-        let i = Math.round((x - t.X(0)) / (t.X(1) - t.X(0))); i = Math.max(1, Math.min(t.pts.length - 1, i));
-        const p = t.pts[i], px = t.X(i), py = t.Y(p.c);
+        let i = 0, best = Infinity;
+        t.P.forEach((q, k) => { const dd = Math.abs(q[0] - x); if (dd < best) { best = dd; i = k; } });
+        const p = t.pts[i], px = t.P[i][0], py = t.P[i][1];
         svg.querySelector(".cross").setAttribute("x1", px); svg.querySelector(".cross").setAttribute("x2", px); svg.querySelector(".cross").setAttribute("opacity", 1);
         const dot = svg.querySelector(".dot"); dot.setAttribute("cx", px); dot.setAttribute("cy", py); dot.setAttribute("opacity", 1);
-        tip.innerHTML = `<b>${fmtR(p.c)}</b> всего<br>${dLabel(p.t.date)} · ${p.t.pair} · ${fmtR(p.t.r)}`;
+        tip.innerHTML = p.tip;
         place(tip, el, px * r.width / t.W, py * r.height / t.H);
       } else {
         const i = Math.floor((x - t.pl) / t.bw); const b = t.buckets[i];
@@ -752,7 +785,34 @@ function viewHome() {
       <div class="tile"><div class="k">${MONF[now.getMonth()]}</div><div class="v ${cls(mss.sum)}">${fmtR(mss.sum)} <small style="font-weight:400;color:var(--text-3);font-size:12px">${mss.n} ${plural(mss.n)}</small></div></div>
     </div>
     ${tdy.length ? `<div class="list" style="margin-top:12px">${tdy.slice().reverse().map(tradeRow).join("")}</div>` : ""}</div>`;
-  return `<div class="cols-home"><div>${h}</div><div>${viewCalendar()}</div></div>`;
+  return `<div class="cols-home"><div class="a-today">${h}</div><div class="a-curve">${homeCurve(ts)}</div><div class="a-cal">${viewCalendar()}</div></div>`;
+}
+const CURVES = [["w", "Неделя", 7], ["m", "Месяц", 30], ["q", "3 мес.", 91], ["y", "Год", 365], ["all", "Всё", 0]];
+function homeCurve(ts) {
+  /* cumulative R by day over the chosen window, x = time */
+  const c = CURVES.find(x => x[0] === S.curve) || CURVES[1];
+  const today = new Date(new Date().setHours(0, 0, 0, 0));
+  const done = ts.filter(t => t.r != null);
+  const start = c[2] ? addDays(today, 1 - c[2]) : (done.length ? pd(done[0].date) : today);
+  const from = iso(start), inR = done.filter(t => t.date >= from);
+  const span = Math.max(1, (today - start) / 864e5);
+  const byDay = {}; for (const t of inR) byDay[t.date] = (byDay[t.date] || 0) + t.r;
+  let cum = 0;
+  const pts = [{ x: 0, c: 0, tip: `${dLabel(from)} · начало` }];
+  Object.keys(byDay).sort().forEach(d => {
+    cum += byDay[d];
+    pts.push({ x: Math.min(1, (pd(d) - start) / 864e5 / span), c: cum, tip: `<b>${fmtR(cum)}</b> с ${dLabel(from)}<br>${dLong(d)}: ${fmtR(byDay[d])}` });
+  });
+  if (pts[pts.length - 1].x < 1) pts.push({ x: 1, c: cum, tip: `<b>${fmtR(cum)}</b> на сегодня` });
+  const st = stats(inR);
+  const v = document.getElementById("view"), inner = Math.min((v.clientWidth || 375) - 32, 1256);
+  const W = DESK() ? inner - 16 - 400 - 42 : null;
+  const chart = inR.length ? curveChart(pts, 1, dLabel(from), "сегодня", DESK() ? 250 : 190, W) : `<div class="empty">Нет сделок за этот период</div>`;
+  return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div><h3 style="margin-bottom:4px">Кривая R</h3><div style="font-size:26px;font-weight:700;letter-spacing:-.02em" class="${cls(st.sum)}">${fmtR(st.sum)}</div>
+      <div class="sub" style="color:var(--text-2);font-size:13px">${st.n} ${plural(st.n)} · винрейт ${pct(st.wr)} · просадка ${st.dd ? "−" + num(st.dd) + "R" : "0R"}</div></div>
+      <div class="seg" style="flex:none;width:auto">${CURVES.map(([k, n]) => `<button class="${c[0] === k ? "on" : ""}" data-curve="${k}" style="padding:0 10px">${n}</button>`).join("")}</div>
+    </div><div style="margin-top:12px">${chart}</div></div>`;
 }
 function viewIdeas() {
   const all = DATA.ideas.filter(i => S.pair === "all" || i.pair === S.pair).slice().reverse();
@@ -995,6 +1055,7 @@ document.addEventListener("click", e => {
   else if (b.dataset.mode) { S.mode = b.dataset.mode; S.calSel = null; saveUi(); render(); }
   else if (b.dataset.pair) { S.pair = b.dataset.pair; saveUi(); render(); }
   else if (b.dataset.acc) { S.acc = b.dataset.acc; saveUi(); render(); }
+  else if (b.dataset.curve) { S.curve = b.dataset.curve; saveUi(); render(); }
   else if (b.dataset.if) { S.ideaF = b.dataset.if; saveUi(); render(); }
   else if (b.dataset.day) { S.calSel = S.calSel === b.dataset.day ? null : b.dataset.day; render(); }
   else if (b.dataset.trade) { if (!sheet.classList.contains("hidden")) { closeSheet(); setTimeout(() => openTrade(b.dataset.trade), 300); } else openTrade(b.dataset.trade); }
