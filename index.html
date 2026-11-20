@@ -329,7 +329,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "c808b595a9ce";
+const APPV = "daa19b3868dc";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -503,8 +503,17 @@ const sideRu = s => s === "BUY" ? "Лонг" : "Шорт";
 function session(t) {
   if (!t.time) return "нет времени";
   const m = +t.time.slice(0, 2) * 60 + +t.time.slice(3, 5);
-  if (m >= 720 && m <= 870) return "Лондон";
-  if (m >= 1020 && m <= 1200) return "Нью-Йорк";
+  // бектест: окна летом на час раньше (Европа и США переходят в разные дни)
+  let sl = 0, sn = 0;
+  if (t.src === "b") {
+    const [y, mo, d] = t.date.split("-").map(Number), x = Date.UTC(y, mo - 1, d, 8);
+    const ls = mm => { const z = new Date(Date.UTC(y, mm + 1, 0)); return z.getUTCDate() - z.getUTCDay(); };
+    const ns = (mm, n) => { const z = new Date(Date.UTC(y, mm, 1)); return 1 + ((7 - z.getUTCDay()) % 7) + 7 * (n - 1); };
+    if (x >= Date.UTC(y, 2, ls(2), 1) && x < Date.UTC(y, 9, ls(9), 1)) sl = 60;
+    if (x >= Date.UTC(y, 2, ns(2, 2), 7) && x < Date.UTC(y, 10, ns(10, 1), 6)) sn = 60;
+  }
+  if (m >= 720 - sl && m <= 870 - sl) return "Лондон";
+  if (m >= 1020 - sn && m <= 1200 - sn) return "Нью-Йорк";
   return "вне окна";
 }
 function duration(t) {
