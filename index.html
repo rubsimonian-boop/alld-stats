@@ -320,7 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "298d146e7fec";
+const APPV = "ef0bf186cf1a";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -1088,6 +1088,7 @@ function openSettings() {
   openSheet(`<div class="shead"><div class="t">Настройки</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
     <div class="card"><div class="set-row"><span>Данные обновлены</span><span>${esc(META ? META.updated : "—")}</span></div>
       <div class="set-row"><span>Сделок / идей</span><span>${DATA.trades.length} / ${DATA.ideas.length}</span></div>
+      <div class="set-row"><span>Версия приложения</span><span>${esc(APPV.slice(0, 6))}</span></div>
       <div class="set-row"><span>Сеть</span><span>${NET ? "есть" : "нет, показываю сохранённое"}</span></div>
       <div class="set-row"><span>Тема</span><span><button class="chip" id="themeBtn">${{ auto: "как в системе", dark: "тёмная", light: "светлая" }[LS.get("as_theme", "auto")]}</button></span></div></div>
     ${(DATA.accounts || []).length ? `<div class="card"><h3>Счета</h3>
