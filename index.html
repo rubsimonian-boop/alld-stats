@@ -320,7 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "65543d56446a";
+const APPV = "c3bf513ea109";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -346,6 +346,8 @@ async function sealBox(bytes) {
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, KEY, bytes));
   const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12); return out;
 }
+/* скрин: "<имя>" — в основном хранилище (s/ рядом), "alld-stats-2:<имя>" — во втором (на сайте и в ПК-программе по пути /alld-stats-2/s/) */
+function shotPath(f) { const i = f.indexOf(":"); return i < 0 ? "s/" + f + ".bin" : "/" + f.slice(0, i) + "/s/" + f.slice(i + 1) + ".bin"; }
 async function getBin(path, fresh) {
   const r = await fetch(path + (fresh ? "?t=" + Date.now() : ""), { cache: fresh ? "no-store" : "default" });
   if (!r.ok) throw new Error(path + " " + r.status);
@@ -425,9 +427,9 @@ async function syncMarks(push) {
       const r = await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.name}/contents/m.bin`,
         { method: "PUT", headers: { Authorization: "Bearer " + tok, Accept: "application/vnd.github+json" }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error("GitHub " + r.status);
-      SYNC = "Отметки сохранены";
-    } else SYNC = (REPO && tok) ? "Отметки синхронизированы" : (dirty ? "Отметки только на этом устройстве" : "");
-  } catch (e) { SYNC = "Отметки не синхронизированы: " + e.message; }
+      SYNC = "Сохранено на GitHub";
+    } else SYNC = (REPO && tok) ? "Синхронизировано с GitHub" : (dirty ? "Только на этом устройстве" : "");
+  } catch (e) { SYNC = "Не сохранилось на GitHub: " + e.message; }
 }
 function setMark(id, patch) {
   const cur = MARKS[id] || {};
@@ -927,7 +929,7 @@ async function loadShots(root) {
   for (const img of root.querySelectorAll("img[data-f]")) {
     const f = img.dataset.f;
     try {
-      if (!IMG[f]) IMG[f] = URL.createObjectURL(new Blob([await openBox(await getBin("s/" + f + ".bin"))], { type: "image/jpeg" }));
+      if (!IMG[f]) IMG[f] = URL.createObjectURL(new Blob([await openBox(await getBin(shotPath(f)))], { type: "image/jpeg" }));
       img.src = IMG[f];
       img.onclick = () => openViewer(IMG[f]);
     } catch (e) { img.alt = "Скрин недоступен без сети"; img.style.minHeight = "40px"; }
@@ -1026,6 +1028,9 @@ function openIdea(id) {
     <div class="card"><h3>Идея${i.num ? " №" + i.num : ""}</h3><div class="text">${esc(i.text)}</div>
     <div class="hint">${t ? `Сделка Trade№${t.num}: ${fmtR(t.r)}` : (i.result ? esc(i.result) : "Без входа")}</div></div>`;
   if (t) h += `<button class="btn ghost" data-trade="${esc(t.id)}" style="margin-bottom:12px">Открыть сделку</button>`;
+  const cm = markOf("c_" + i.id);
+  h += `<div class="card"><h3>Комментарий</h3><textarea class="note" id="ideaCm" placeholder="Что думаешь об этой идее">${esc(cm ? cm.n : "")}</textarea>
+    <div class="hint" id="ideaCmHint">${LS.get("as_tok", "") ? "" : "Без токена GitHub (Настройки) комментарий только на этом устройстве"}</div></div>`;
   h += shotsHtml(i.shots, ["Идея"]);
   if (!i.shots.length) h += `<div class="status">Скрины этой идеи остались в Notion</div>`;
   // отложка поставлена / убрана: время, заметка и скрин M5
@@ -1034,6 +1039,11 @@ function openIdea(id) {
     h += `<div class="card"><h3>${esc(n.time)} · ${esc(n.text)}</h3>${s ? `<div class="shots"><div class="shot"><div class="cap">${esc(s.who)} · 5m</div><img data-f="${esc(s.f)}" alt="${esc(s.who)} 5m"></div></div>` : ""}</div>`;
   });
   openSheet(h);
+  const ta = document.getElementById("ideaCm"), hint = document.getElementById("ideaCmHint");
+  ta.oninput = () => {
+    setMark("c_" + i.id, { n: ta.value.trim() });
+    clearTimeout(ta.tm); ta.tm = setTimeout(() => { hint.textContent = SYNC; }, 3000);
+  };
   loadShots(sheetBody);
 }
 function openArchive() {
@@ -1056,6 +1066,10 @@ function openSettings() {
       <div class="hint" style="margin:0 0 10px">Названия счетов в приложении. Сделки разносятся по счетам сами: робот знает, на каком счёте был вход.</div>
       ${DATA.accounts.map(a => `<div class="set-row" style="align-items:center"><span>${esc(a.name)}<br><small style="color:var(--text-3)">№ …${esc(a.id.slice(-4))}</small></span>
         <input class="field" style="height:38px;max-width:180px" data-accname="${esc(a.id)}" value="${esc(accName(a.id))}"></div>`).join("")}</div>` : ""}
+    <div class="card"><h3>Синхронизация</h3>
+      <div class="hint" style="margin:0 0 10px">Токен GitHub (fine-grained, только репозиторий alld-stats, Contents: Read and write). С ним комментарии и названия счетов одинаковые на телефоне и ПК. Хранится только на этом устройстве.</div>
+      <input class="field" id="tokIn" type="password" autocomplete="off" placeholder="github_pat_…" value="${esc(tok)}">
+      <div class="hint" id="tokHint">${esc(SYNC)}</div></div>
     <div class="card"><h3>Без интернета</h3>
       <div class="hint" style="margin:0 0 10px">Статистика, сделки и идеи работают без сети всегда: показываю последнее сохранённое. Скрины без сети открываются только те, что уже смотрел, — или скачай все сразу.</div>
       <button class="btn ghost" id="offBtn">Скачать все скрины</button><div class="hint" id="offHint"></div></div>
@@ -1066,6 +1080,11 @@ function openSettings() {
     const id = inp.dataset.accname, a = DATA.accounts.find(x => x.id === id), v = inp.value.trim();
     setMark("_acc_" + id, { n: v && v !== a.name ? v : "" }); render();
   });
+  document.getElementById("tokIn").onchange = async e => {
+    const v = e.target.value.trim(); v ? LS.set("as_tok", v) : LS.del("as_tok");
+    const th = document.getElementById("tokHint"); th.textContent = "Проверяю…";
+    await syncMarks(true); th.textContent = SYNC || "Готово"; render();
+  };
   const arc = document.getElementById("arcBtn");
   if (arc) arc.onclick = () => { closeSheet(); setTimeout(openArchive, 300); };
   document.getElementById("offBtn").onclick = async () => {
@@ -1073,7 +1092,7 @@ function openSettings() {
     const hint = document.getElementById("offHint"), btn = document.getElementById("offBtn");
     btn.disabled = true; let ok = 0, bad = 0;
     for (let i = 0; i < list.length; i += 6) {
-      await Promise.all(list.slice(i, i + 6).map(f => fetch("s/" + f + ".bin").then(r => r.ok ? ok++ : bad++).catch(() => bad++)));
+      await Promise.all(list.slice(i, i + 6).map(f => fetch(shotPath(f)).then(r => r.ok ? ok++ : bad++).catch(() => bad++)));
       hint.textContent = `Скачано ${ok} из ${list.length}`;
     }
     hint.textContent = bad ? `Скачано ${ok} из ${list.length}, ${bad} не вышло — нужна сеть` : `Готово: все ${ok} скринов есть без интернета`;
