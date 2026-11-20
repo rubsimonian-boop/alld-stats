@@ -320,7 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "c3bf513ea109";
+const APPV = "d8a0cd9f84b4";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -400,8 +400,7 @@ async function remoteMarks() {
   if (REPO && tok) {
     const r = await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.name}/contents/m.bin?t=${Date.now()}`,
       { headers: { Authorization: "Bearer " + tok, Accept: "application/vnd.github+json" }, cache: "no-store" });
-    if (r.status === 404) return { marks: {}, sha: null };
-    if (!r.ok) throw new Error("GitHub " + r.status);
+    if (!r.ok) throw new Error(ghWhy(r.status, "read"));
     const j = await r.json();
     const raw = await openBox(b64.dec(j.content.replace(/\s/g, "")).buffer);
     return { marks: JSON.parse(new TextDecoder().decode(raw)), sha: j.sha };
@@ -414,29 +413,38 @@ function mergeMarks(a, b) {
   for (const k in b) if (!out[k] || (b[k].t || 0) > (out[k].t || 0)) out[k] = b[k];
   return out;
 }
-async function syncMarks(push) {
+function ghWhy(code, what) {  // понятная причина вместо «GitHub 403»
+  if (code === 401) return "токен неверный или истёк — создай новый";
+  if (code === 403 || (code === 404 && what === "write")) return "у токена нет права записи: Only select repositories → alld-stats, Contents: Read and write";
+  if (code === 404) return "токен не видит репозиторий alld-stats: Only select repositories → alld-stats";
+  if (code === 409 || code === 422) return "файл изменился одновременно — попробую ещё раз";
+  return "GitHub " + code;
+}
+async function syncMarks(push, force) {
   try {
     const { marks, sha } = await remoteMarks();
     const merged = mergeMarks(marks, MARKS);
     const dirty = JSON.stringify(merged) !== JSON.stringify(marks);
     MARKS = merged; LS.set("as_marks", MARKS);
     const tok = LS.get("as_tok", "");
-    if (push && dirty && REPO && tok) {
+    if (push && (dirty || force) && REPO && tok) {
       const body = { message: "marks", content: b64.enc(await sealBox(new TextEncoder().encode(JSON.stringify(MARKS)))) };
       if (sha) body.sha = sha;
       const r = await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.name}/contents/m.bin`,
         { method: "PUT", headers: { Authorization: "Bearer " + tok, Accept: "application/vnd.github+json" }, body: JSON.stringify(body) });
-      if (!r.ok) throw new Error("GitHub " + r.status);
+      if (!r.ok) throw new Error(ghWhy(r.status, "write"));
       SYNC = "Сохранено на GitHub";
-    } else SYNC = (REPO && tok) ? "Синхронизировано с GitHub" : (dirty ? "Только на этом устройстве" : "");
-  } catch (e) { SYNC = "Не сохранилось на GitHub: " + e.message; }
+    } else SYNC = (REPO && tok) ? "Синхронизировано с GitHub" : (!REPO ? "Не знаю репозиторий — нажми «Обновить данные»" : (dirty ? "Только на этом устройстве" : ""));
+  } catch (e) { SYNC = "Не сохранилось на GitHub: " + (e.message === "Failed to fetch" ? "нет сети" : e.message); }
 }
 function setMark(id, patch) {
   const cur = MARKS[id] || {};
   const m = Object.assign({}, cur, patch, { t: Date.now() });
   if (m.s == null && !m.n) m.del = 1; else delete m.del;
   MARKS[id] = m; LS.set("as_marks", MARKS);
-  clearTimeout(setMark.tm); setMark.tm = setTimeout(() => syncMarks(true).then(render), 800);
+  clearTimeout(setMark.tm); setMark.tm = setTimeout(() => syncMarks(true).then(() => {
+    render(); const h = document.getElementById("ideaCmHint"); if (h) h.textContent = SYNC;
+  }), 800);
 }
 function markOf(id) { const m = MARKS[id]; return m && !m.del ? m : null; }
 
@@ -1040,10 +1048,7 @@ function openIdea(id) {
   });
   openSheet(h);
   const ta = document.getElementById("ideaCm"), hint = document.getElementById("ideaCmHint");
-  ta.oninput = () => {
-    setMark("c_" + i.id, { n: ta.value.trim() });
-    clearTimeout(ta.tm); ta.tm = setTimeout(() => { hint.textContent = SYNC; }, 3000);
-  };
+  ta.oninput = () => { hint.textContent = "Сохраняю…"; setMark("c_" + i.id, { n: ta.value.trim() }); };
   loadShots(sheetBody);
 }
 function openArchive() {
@@ -1083,7 +1088,7 @@ function openSettings() {
   document.getElementById("tokIn").onchange = async e => {
     const v = e.target.value.trim(); v ? LS.set("as_tok", v) : LS.del("as_tok");
     const th = document.getElementById("tokHint"); th.textContent = "Проверяю…";
-    await syncMarks(true); th.textContent = SYNC || "Готово"; render();
+    await syncMarks(true, !!v); th.textContent = v ? (SYNC === "Сохранено на GitHub" ? "Токен работает: запись на GitHub прошла" : SYNC) : "Токен убран"; render();
   };
   const arc = document.getElementById("arcBtn");
   if (arc) arc.onclick = () => { closeSheet(); setTimeout(openArchive, 300); };
@@ -1197,7 +1202,9 @@ document.getElementById("lockForm").onsubmit = async e => {
   const k = LS.get("as_key", null);
   if (k) { KEY = await importKey(b64.dec(k)); await unlocked(); }
   else document.getElementById("lock").classList.remove("hidden");
-  document.addEventListener("visibilitychange", async () => { if (document.visibilityState === "visible" && KEY) { await loadData(); await syncMarks(false); if (sheet.classList.contains("hidden")) render(); } });
+  const back = async () => { if (KEY && Date.now() - (back.t || 0) > 5000) { back.t = Date.now(); await loadData(); await syncMarks(false); if (sheet.classList.contains("hidden")) render(); } };
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") back(); });
+  window.addEventListener("focus", back);  // окно на ПК: переключился на него — подтянуть комментарии с телефона
 })();
 </script>
 </body>
