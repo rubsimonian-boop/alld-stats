@@ -329,7 +329,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "16c986b04b37";
+const APPV = "c808b595a9ce";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -366,10 +366,11 @@ async function getBin(path, fresh) {
 /* ============================================================ data */
 let DATA = { trades: [], ideas: [] }, META = null, MARKS = LS.get("as_marks", {});
 const S = Object.assign({ tab: "home", curve: "m", mode: "week", anchor: null, pair: "all", acc: "all", calSel: null, ideaF: "no" }, LS.get("as_ui", {}));
-if (!["home", "stats", "trades", "ideas"].includes(S.tab)) S.tab = "home";
+if (!["home", "stats", "trades", "ideas", "bt"].includes(S.tab)) S.tab = "home";
+if (!S.btTest) S.btTest = "all";
 if (S.acc === "none") S.acc = "all";
 function saveUi() {
-  LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit });
+  LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit, btTest: S.btTest, btF: S.btF });
   // фильтры (пара, счёт, период, график) — общие для всех устройств через токен; вкладка — у каждого своя
   if (!SYNCED) return;
   const n = JSON.stringify({ mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit });
@@ -937,6 +938,45 @@ function viewIdeas() {
   return h;
 }
 
+/* ============================================================ бектест: отдельная статистика, с настоящими не смешивается */
+function viewBacktest() {
+  const bt = DATA.bt || { trades: [], ideas: [], tests: [] };
+  if (!bt.trades.length && !bt.ideas.length) return `<div class="card"><div class="empty">Бектестов пока нет. Сделки из приложения «Бектест» появятся здесь сами.</div></div>`;
+  const ok = x => (S.btTest === "all" || x.test === S.btTest) && (S.pair === "all" || x.pair === S.pair);
+  const ts = bt.trades.filter(ok), ids = bt.ideas.filter(ok), s = stats(ts);
+  let h = `<div class="chips" style="padding:0 0 12px">${[["all", "Все тесты"]].concat(bt.tests.map(n => [n, n])).map(([k, n]) =>
+    `<button class="chip ${S.btTest === k ? "on" : ""}" data-bttest="${esc(k)}">${esc(n)}</button>`).join("")}</div>`;
+  if (!ts.length && !ids.length) return h + `<div class="card"><div class="empty">В этом тесте сделок нет</div></div>`;
+  h += `<div class="card"><div class="hero"><div><div class="big ${cls(s.sum)}">${fmtR(s.sum)}</div>
+    <div class="sub">${s.n} ${plural(s.n)} · винрейт ${pct(s.wr)}${ids.length ? ` · идей без входа: ${ids.length}` : ""}</div></div></div>
+    <div class="tiles">
+      <div class="tile"><div class="k">Плюсов / минусов / в 0</div><div class="v">${s.w} / ${s.l} / ${s.be}</div></div>
+      <div class="tile"><div class="k">Средний плюс</div><div class="v pos">${s.avgW == null ? "—" : fmtR(s.avgW)}</div></div>
+      <div class="tile"><div class="k">Средний минус</div><div class="v neg">${s.avgL == null ? "—" : fmtR(s.avgL)}</div></div>
+      <div class="tile"><div class="k">R на сделку</div><div class="v ${cls(s.exp)}">${s.exp == null ? "—" : (s.exp > 0 ? "+" : s.exp < 0 ? "−" : "") + num(Math.abs(s.exp), 2) + "R"}</div></div>
+      <div class="tile"><div class="k">Профит-фактор</div><div class="v">${num(s.pf, 2)}</div></div>
+      <div class="tile"><div class="k">Макс. просадка</div><div class="v ${s.dd ? "neg" : ""}">${s.dd ? "−" + num(s.dd) + "R" : "0R"}</div></div>
+      <div class="tile"><div class="k">Лучшая / худшая</div><div class="v"><span class="pos">${fmtR(s.best)}</span> / <span class="neg">${fmtR(s.worst)}</span></div></div>
+      <div class="tile"><div class="k">Серия плюсов / минусов</div><div class="v">${s.ws} / ${s.ls}</div></div>
+    </div></div>`;
+  const eq = equityChart(ts, 1);
+  if (eq) h += `<div class="card"><h3>Рост R по сделкам</h3>${eq}</div>`;
+  h += `<div class="grid3">`;
+  if (S.pair === "all") h += breakdown("Пары", [...new Set(ts.map(t => t.pair))].map(p => ({ name: p, ts: ts.filter(t => t.pair === p) })));
+  h += breakdown("Сессии", ["Лондон", "Нью-Йорк", "вне окна"].map(n => ({ name: n[0].toUpperCase() + n.slice(1), ts: ts.filter(t => session(t) === n) })));
+  h += breakdown("Дни недели", DOW.slice(0, 5).map((n, i) => ({ name: n, ts: ts.filter(t => dowIdx(t.date) === i) })));
+  h += breakdown("Как закрыта", [["Тейк", "тейк"], ["Стоп", "стоп"], ["Безубыток", "безубыток"], ["Вручную", "вручную"]].map(([n, k]) => ({ name: n, ts: ts.filter(t => t.reason === k) })));
+  if (S.btTest === "all" && bt.tests.length > 1) h += breakdown("Тесты", bt.tests.map(n => ({ name: n, ts: ts.filter(t => t.test === n) })));
+  h += `</div>`;
+  const f = S.btF === "ideas" ? "ideas" : "trades";
+  h += `<div class="chips" style="padding:4px 0 12px"><button class="chip ${f === "trades" ? "on" : ""}" data-btf="trades">Сделки (${ts.length})</button><button class="chip ${f === "ideas" ? "on" : ""}" data-btf="ideas">Идеи без входа (${ids.length})</button></div>`;
+  if (f === "trades") h += `<div class="tgrid">${tradeList(ts)}</div>`;
+  else h += ids.length ? `<div class="list igrid">` + ids.slice().reverse().map(i =>
+    `<button class="item" data-idea="${esc(i.id)}"><div class="main"><div class="l1">${i.pair}<span class="badge">${dLabel(i.date)} ${i.time}</span></div><div class="idea-text">${esc(i.text)}</div></div><div class="rv zero" style="font-size:12px;font-weight:500">${esc(i.result)}</div></button>`).join("") + `</div>`
+    : `<div class="card"><div class="empty">Идей без входа нет</div></div>`;
+  return h;
+}
+
 /* ============================================================ sheet */
 const sheet = document.getElementById("sheet"), sheetBg = document.getElementById("sheetBg"), sheetBody = document.getElementById("sheetBody");
 function openSheet(html) {
@@ -1037,15 +1077,17 @@ function closeViewer(fromPop) { document.getElementById("viewer").classList.add(
 document.getElementById("viewerX").onclick = () => closeViewer();
 
 function openTrade(id) {
-  const t = TR().find(x => x.id === id); if (!t) return;
-  const kv = [["Направление", sideRu(t.side)], ["Сессия", session(t) === "нет времени" ? "—" : session(t)],
+  const t = TR().find(x => x.id === id) || ((DATA.bt || {}).trades || []).find(x => x.id === id); if (!t) return;
+  const kv = t.src === "b" ? [["Направление", sideRu(t.side)], ["Сессия", session(t)], ["Вход", `${dLabel(t.date)} ${t.time}`],
+    ["Выход", `${t.cdate && t.cdate !== t.date ? dLabel(t.cdate) + " " : ""}${t.ctime}`], ["Закрыта", t.reason || "—"], ["Длительность", duration(t) || "—"],
+    ["Тест", t.test]] : [["Направление", sideRu(t.side)], ["Сессия", session(t) === "нет времени" ? "—" : session(t)],
     ["Вход", t.time ? `${dLabel(t.date)} ${t.time}` : dLabel(t.date)], ["Выход", t.ctime ? `${t.cdate && t.cdate !== t.date ? dLabel(t.cdate) + " " : ""}${t.ctime}` : (t.open ? "открыта" : "—")],
     ["Закрыта", t.reason || "—"], ["Длительность", duration(t) || "—"], ["Номер", t.num ? "Trade№" + t.num : "—"],
     ["Счёт", t.accs && t.accs.length ? t.accs.map(x => accName(x.a)).join(", ") : "—"],
     ["Риск", t.accs && t.accs.some(x => x.risk != null) ? t.accs.filter(x => x.risk != null).map(x => (x.est ? "≈" : "") + x.risk + "%").join(" / ") : (t.risk || "—")]];
   const pl = (t.accs || []).filter(x => x.pct != null);
   const pctHtml = pl.length ? `<div class="pctrow">${pl.map(x => `<div><span class="k">${esc(accName(x.a))}</span><b class="${cls(x.pct)}">${fmtP(x.pct)}</b></div>`).join("")}</div>` : "";
-  let h = `<div class="shead"><div class="t">${t.pair} · ${dLong(t.date)}</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
+  let h = `<div class="shead"><div class="t">${t.src === "b" ? "Бектест · " : ""}${t.pair} · ${dLong(t.date)}</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
     <div class="card"><div class="big ${cls(t.r)}" style="font-size:40px;font-weight:700;letter-spacing:-.03em">${t.open ? "открыта" : fmtR(t.r)}</div>${pctHtml}
     <div class="kv" style="margin-top:14px">${kv.map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`).join("")}</div>
     ${t.rj != null ? `<div class="hint">На этом счёте ${fmtR(t.r)}, в журнале ${fmtR(t.rj)} — свой вход и стоп</div>` : ""}
@@ -1054,7 +1096,7 @@ function openTrade(id) {
 `;
   if (t.idea) h += `<div class="card"><h3>Объяснение</h3><div class="text">${esc(t.idea)}</div></div>`;
   if (t.changes) h += `<div class="card"><h3>Изменения</h3>${t.changes.map(c => `<div class="text" style="margin-bottom:8px">${esc(c)}</div>`).join("")}</div>`;
-  if (t.lesson) h += `<div class="card"><h3>Урок</h3><div class="text">${esc(t.lesson)}</div></div>`;
+  if (t.lesson) h += `<div class="card"><h3>${t.src === "b" ? "Заметка" : "Урок"}</h3><div class="text">${esc(t.lesson)}</div></div>`;
   h += shotsHtml(t.shots, ["Вход", "Разворот", "Выход"]);
   if (!t.shots.length && t.src === "n") h += `<div class="status">Старая сделка из Notion — скринов здесь нет</div>`;
   if (t.src === "h") h += `<div class="status">Сделка из истории MT5 — в журнале её нет, скринов нет</div>`;
@@ -1062,7 +1104,7 @@ function openTrade(id) {
   loadShots(sheetBody);
 }
 function openIdea(id) {
-  const i = DATA.ideas.find(x => x.id === id); if (!i) return;
+  const i = DATA.ideas.find(x => x.id === id) || ((DATA.bt || {}).ideas || []).find(x => x.id === id); if (!i) return;
   const t = i.trade && DATA.trades.find(x => x.num === i.trade);
   let h = `<div class="shead"><div class="t">${i.pair} · ${dLong(i.date)}${i.time ? " " + i.time : ""}</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
     <div class="card"><h3>Идея${i.num ? " №" + i.num : ""}</h3><div class="text">${esc(i.text)}</div>
@@ -1149,13 +1191,14 @@ const TABS = [
   ["home", "Главная", '<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>'],
   ["stats", "Статистика", '<path d="M4 19V10M10 19V5M16 19v-7M22 19H2" />'],
   ["trades", "Сделки", '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>'],
+  ["bt", "Бектест", '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>'],
   ["ideas", "Идеи", '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>'],
 ];
 function render() {
   TIPS = [];
   document.getElementById("tabs").innerHTML = TABS.map(([k, n, ic]) => `<button class="${S.tab === k ? "on" : ""}" data-tab="${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ic}</svg>${n}</button>`).join("");
   document.getElementById("viewTitle").textContent = TABS.find(x => x[0] === S.tab)[1];
-  const showPeriod = S.tab !== "ideas";
+  const showPeriod = S.tab !== "ideas" && S.tab !== "bt";
   document.getElementById("periodBox").classList.toggle("hidden", !showPeriod);
   const mode = S.tab === "home" ? "month" : S.mode;
   document.getElementById("modeSeg").innerHTML = MODES.map(([k, n]) => `<button class="${mode === k ? "on" : ""}" data-mode="${k}">${n}</button>`).join("");
@@ -1165,11 +1208,11 @@ function render() {
   const pairs = ["all", "EURUSD", "GBPUSD", "XAUUSD"];
   const accs = DATA.accounts || [];
   document.getElementById("pairChips").innerHTML = pairs.map(p => `<button class="chip ${S.pair === p ? "on" : ""}" data-pair="${p}">${p === "all" ? "Все пары" : p}</button>`).join("");
-  document.getElementById("accChips").classList.toggle("hidden", !accs.length || S.tab === "ideas");
+  document.getElementById("accChips").classList.toggle("hidden", !accs.length || S.tab === "ideas" || S.tab === "bt");
   document.getElementById("accChips").innerHTML = [["all", "Все счета"]].concat(accs.map(a => [a.id, accName(a.id)]))
     .map(([k, n]) => `<button class="chip ${S.acc === k ? "on" : ""}" data-acc="${esc(k)}">${esc(n)}</button>`).join("");
   const v = document.getElementById("view");
-  v.innerHTML = (S.tab === "home" ? viewHome() : S.tab === "stats" ? viewOverview() : S.tab === "trades" ? viewTrades() : viewIdeas())
+  v.innerHTML = (S.tab === "home" ? viewHome() : S.tab === "stats" ? viewOverview() : S.tab === "trades" ? viewTrades() : S.tab === "bt" ? viewBacktest() : viewIdeas())
     + `<div class="status">${NET ? "" : "Нет сети — показываю сохранённое. "}${META ? "Обновлено " + esc(META.updated) : ""}</div>`;
   wireTips();
 }
@@ -1182,6 +1225,8 @@ document.addEventListener("click", e => {
   else if (b.dataset.curve) { S.curve = b.dataset.curve; saveUi(); render(); }
   else if (b.dataset.unit) { S.unit = b.dataset.unit; saveUi(); render(); }
   else if (b.dataset.if) { S.ideaF = b.dataset.if; saveUi(); render(); }
+  else if (b.dataset.bttest) { S.btTest = b.dataset.bttest; saveUi(); render(); }
+  else if (b.dataset.btf) { S.btF = b.dataset.btf; saveUi(); render(); }
   else if (b.dataset.day) { S.calSel = S.calSel === b.dataset.day ? null : b.dataset.day; render(); }
   else if (b.dataset.trade) { if (!sheet.classList.contains("hidden")) { closeSheet(); setTimeout(() => openTrade(b.dataset.trade), 300); } else openTrade(b.dataset.trade); }
   else if (b.dataset.idea) openIdea(b.dataset.idea);
@@ -1219,7 +1264,7 @@ let rsz; window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setT
   v.addEventListener("touchstart", e => { if (e.target.closest(".chart")) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
   v.addEventListener("touchend", e => {
     if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
-    if (Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy) && S.tab !== "ideas" && (S.tab === "home" || S.mode !== "all"))
+    if (Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy) && S.tab !== "ideas" && S.tab !== "bt" && (S.tab === "home" || S.mode !== "all"))
       S.tab === "home" ? shiftMonth(dx < 0 ? 1 : -1) : shift(dx < 0 ? 1 : -1);
   }, { passive: true });
 })();
