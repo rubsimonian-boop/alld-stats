@@ -329,7 +329,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "daa19b3868dc";
+const APPV = "18708ade80de";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -476,7 +476,7 @@ function setMark(id, patch) {
   if (m.s == null && !m.n) m.del = 1; else delete m.del;
   MARKS[id] = m; LS.set("as_marks", MARKS);
   clearTimeout(setMark.tm); setMark.tm = setTimeout(() => syncMarks(true).then(() => {
-    render(); const h = document.getElementById("ideaCmHint"); if (h) h.textContent = SYNC;
+    render(); for (const id of ["ideaCmHint", "tradeCmHint"]) { const h = document.getElementById(id); if (h) h.textContent = SYNC; }
   }), 800);
 }
 function markOf(id) { const m = MARKS[id]; return m && !m.del ? m : null; }
@@ -812,7 +812,7 @@ function buckets(mode, a, ts) {
 function tradeRow(t) {
   const acc = S.acc === "all" && t.accs && t.accs.length ? t.accs.map(x => accName(x.a)).join(" + ") : "";
   const l2 = [t.time ? t.time + (t.ctime ? "→" + t.ctime : "") : dLabel(t.date), session(t) !== "нет времени" ? session(t) : "", t.reason || (t.open ? "открыта" : ""), riskOf(t) ? "риск " + riskOf(t) : "", acc].filter(Boolean).join(" · ");
-  return `<button class="item" data-trade="${esc(t.id)}"><div class="main"><div class="l1">${t.pair} <span class="badge">${sideRu(t.side)}</span></div>
+  return `<button class="item" data-trade="${esc(t.id)}"><div class="main"><div class="l1">${t.pair} <span class="badge">${sideRu(t.side)}</span>${markOf("c_" + t.id) ? ` <span title="Есть комментарий">💬</span>` : ""}</div>
     <div class="l2">${esc(l2)}</div></div><div class="rv ${cls(t.r)}">${t.open ? "…" : fmtR(t.r)}${pctLine([t], true) ? `<small style="font-weight:600">${pctLine([t], true)}</small>` : t.num ? `<small>№${t.num}</small>` : ""}</div></button>`;
 }
 function tradeList(ts, flat) {
@@ -1106,10 +1106,16 @@ function openTrade(id) {
   if (t.idea) h += `<div class="card"><h3>Объяснение</h3><div class="text">${esc(t.idea)}</div></div>`;
   if (t.changes) h += `<div class="card"><h3>Изменения</h3>${t.changes.map(c => `<div class="text" style="margin-bottom:8px">${esc(c)}</div>`).join("")}</div>`;
   if (t.lesson) h += `<div class="card"><h3>${t.src === "b" ? "Заметка" : "Урок"}</h3><div class="text">${esc(t.lesson)}</div></div>`;
+  // комментарий к сделке — как у идей: хранится в отметках (c_<id>), с токеном одинаковый на телефоне и ПК
+  const cm = markOf("c_" + t.id);
+  h += `<div class="card"><h3>Комментарий</h3><textarea class="note" id="tradeCm" placeholder="Что думаешь об этой сделке">${esc(cm ? cm.n : "")}</textarea>
+    <div class="hint" id="tradeCmHint">${LS.get("as_tok", "") ? "" : "Без токена GitHub (Настройки) комментарий только на этом устройстве"}</div></div>`;
   h += shotsHtml(t.shots, ["Вход", "Разворот", "Выход"]);
   if (!t.shots.length && t.src === "n") h += `<div class="status">Старая сделка из Notion — скринов здесь нет</div>`;
   if (t.src === "h") h += `<div class="status">Сделка из истории MT5 — в журнале её нет, скринов нет</div>`;
   openSheet(h);
+  const ta = document.getElementById("tradeCm"), hint = document.getElementById("tradeCmHint");
+  ta.oninput = () => { hint.textContent = "Сохраняю…"; setMark("c_" + t.id, { n: ta.value.trim() }); };
   loadShots(sheetBody);
 }
 function openIdea(id) {
