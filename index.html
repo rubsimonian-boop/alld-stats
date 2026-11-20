@@ -320,7 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "734b7447b447";
+const APPV = "0a60b041b0bc";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -433,7 +433,7 @@ async function syncMarks(push, force) {
     const dirty = JSON.stringify(merged) !== JSON.stringify(marks);
     MARKS = merged; LS.set("as_marks", MARKS);
     const tok = LS.get("as_tok", "");
-    if (push && (dirty || force) && REPO && tok) {
+    if ((dirty || force) && REPO && tok) {  // всё, чего нет на GitHub, — залить сразу (и написанное раньше, когда синхронизация не работала)
       const body = { message: "marks", content: b64.enc(await sealBox(new TextEncoder().encode(JSON.stringify(MARKS)))) };
       if (sha) body.sha = sha;
       const r = await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.name}/contents/m.bin`,
