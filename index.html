@@ -320,7 +320,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "2da0d4330059";
+const APPV = "65543d56446a";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -1028,6 +1028,11 @@ function openIdea(id) {
   if (t) h += `<button class="btn ghost" data-trade="${esc(t.id)}" style="margin-bottom:12px">Открыть сделку</button>`;
   h += shotsHtml(i.shots, ["Идея"]);
   if (!i.shots.length) h += `<div class="status">Скрины этой идеи остались в Notion</div>`;
+  // отложка поставлена / убрана: время, заметка и скрин M5
+  (i.notes || []).forEach((n, k) => {
+    const s = i.shots.find(x => x.k === "Заметка" && x.n === k);
+    h += `<div class="card"><h3>${esc(n.time)} · ${esc(n.text)}</h3>${s ? `<div class="shots"><div class="shot"><div class="cap">${esc(s.who)} · 5m</div><img data-f="${esc(s.f)}" alt="${esc(s.who)} 5m"></div></div>` : ""}</div>`;
+  });
   openSheet(h);
   loadShots(sheetBody);
 }
