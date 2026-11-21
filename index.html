@@ -99,6 +99,14 @@ main { padding-top: 14px; }
 .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border-radius: 12px; overflow: hidden; margin-top: 16px; }
 @media (min-width: 560px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
 .tile { background: var(--surface); padding: 10px 12px; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+.cmp th { text-align: right; font-size: 12px; font-weight: 500; color: var(--text-3); padding: 6px 8px; }
+.cmp th:first-child, .cmp td:first-child { text-align: left; }
+.cmp td { text-align: right; padding: 8px; border-top: 1px solid var(--line); font-weight: 600; }
+.cmp td:first-child { font-weight: 500; color: var(--text-2, var(--text-3)); }
+.cmp small { color: var(--text-3); font-weight: 400; font-size: 11px; }
+.cmp tr.go { cursor: pointer; }
+.cmp tr.go:hover td { background: var(--line); }
 .tile .k { font-size: 12px; color: var(--text-3); }
 .tile .v { font-size: 18px; font-weight: 650; margin-top: 2px; }
 .empty { color: var(--text-3); text-align: center; padding: 28px 8px; font-size: 14px; }
@@ -337,7 +345,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "1da6d3cf026f";
+const APPV = "7472b3c64254";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -955,15 +963,51 @@ function viewIdeas() {
   return h;
 }
 
+/* ============================================================ Реал vs Бектест той же недели (тест в AlldView = неделя) */
+function weekMon(ds) { const d = new Date(ds + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); }
+function addDays(ds, n) { const d = new Date(ds + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function compareWeeks(bt) {
+  const weeks = bt.tests.filter(n => /^Неделя /.test(n));
+  if (!weeks.length) return "";
+  const okPair = t => S.pair === "all" || t.pair === S.pair;
+  const real = TR().filter(okPair);
+  const rows = weeks.map(n => {
+    const b = bt.trades.filter(t => t.test === n && okPair(t));
+    const d0 = (b[0] || bt.ideas.find(i => i.test === n) || {}).date; if (!d0) return null;
+    const mon = weekMon(d0), end = addDays(mon, 6);
+    return { n, mon, b: stats(b), r: stats(real.filter(t => t.date >= mon && t.date <= end)) };
+  }).filter(Boolean);
+  const diff = (a, b) => { const v = b - a; return `<span class="${cls(v)}">${v > 0 ? "+" : v < 0 ? "−" : ""}${num(Math.abs(v), 2)}R</span>`; };
+  const expR = s => s.exp == null ? "—" : (s.exp > 0 ? "+" : s.exp < 0 ? "−" : "") + num(Math.abs(s.exp), 2) + "R";
+  if (S.btTest !== "all") {                       // одна неделя: подробно
+    const w = rows.find(x => x.n === S.btTest); if (!w) return "";
+    const line = (k, a, b, d = "") => `<tr><td>${k}</td><td>${a}</td><td>${b}</td><td>${d}</td></tr>`;
+    return `<div class="card"><h3>Реал vs Бектест · ${esc(w.n.replace("Неделя ", ""))}</h3><table class="cmp">
+      <tr><th></th><th>Реал</th><th>Бектест</th><th>Разница</th></tr>
+      ${line("Итог", `<span class="${cls(w.r.sum)}">${fmtR(w.r.sum)}</span>`, `<span class="${cls(w.b.sum)}">${fmtR(w.b.sum)}</span>`, diff(w.r.sum, w.b.sum))}
+      ${line("Сделок", w.r.n, w.b.n)}
+      ${line("Винрейт", pct(w.r.wr), pct(w.b.wr))}
+      ${line("R на сделку", expR(w.r), expR(w.b))}
+      ${line("Плюсов / минусов", `${w.r.w} / ${w.r.l}`, `${w.b.w} / ${w.b.l}`)}
+      ${line("Профит-фактор", num(w.r.pf, 2), num(w.b.pf, 2))}
+    </table><div class="sub" style="margin-top:8px">Реал — сделки с ${dLabel(w.mon)} по ${dLabel(addDays(w.mon, 4))}${S.pair !== "all" ? " · " + S.pair : ""}. Разница = бектест − реал.</div></div>`;
+  }
+  return `<div class="card"><h3>Реал vs Бектест по неделям</h3><table class="cmp">
+    <tr><th>Неделя</th><th>Реал</th><th>Бектест</th><th>Разница</th></tr>
+    ${rows.map(w => `<tr class="go" data-bttest="${esc(w.n)}"><td>${esc(w.n.replace("Неделя ", ""))}</td><td><span class="${cls(w.r.sum)}">${fmtR(w.r.sum)}</span> <small>${w.r.n}</small></td><td><span class="${cls(w.b.sum)}">${fmtR(w.b.sum)}</span> <small>${w.b.n}</small></td><td>${diff(w.r.sum, w.b.sum)}</td></tr>`).join("")}
+  </table><div class="sub" style="margin-top:8px">Маленькая цифра — сколько сделок. Нажми на неделю — подробно.</div></div>`;
+}
+
 /* ============================================================ бектест: отдельная статистика, с настоящими не смешивается */
 function viewBacktest() {
   const bt = DATA.bt || { trades: [], ideas: [], tests: [] };
   if (!bt.trades.length && !bt.ideas.length) return `<div class="card"><div class="empty">Бектестов пока нет. Сделки из приложения «Бектест» появятся здесь сами.</div></div>`;
   const ok = x => (S.btTest === "all" || x.test === S.btTest) && (S.pair === "all" || x.pair === S.pair);
   const ts = bt.trades.filter(ok), ids = bt.ideas.filter(ok), s = stats(ts);
-  let h = `<div class="chips" style="padding:0 0 12px">${[["all", "Все тесты"]].concat(bt.tests.map(n => [n, n])).map(([k, n]) =>
+  let h = `<div class="chips" style="padding:0 0 12px">${[["all", "Все недели"]].concat(bt.tests.map(n => [n, n])).map(([k, n]) =>
     `<button class="chip ${S.btTest === k ? "on" : ""}" data-bttest="${esc(k)}">${esc(n)}</button>`).join("")}</div>`;
   if (!ts.length && !ids.length) return h + `<div class="card"><div class="empty">В этом тесте сделок нет</div></div>`;
+  h += compareWeeks(bt);
   h += `<div class="card"><div class="hero"><div><div class="big ${cls(s.sum)}">${fmtR(s.sum)}</div>
     <div class="sub">${s.n} ${plural(s.n)} · винрейт ${pct(s.wr)}${ids.length ? ` · идей без входа: ${ids.length}` : ""}</div></div></div>
     <div class="tiles">
@@ -1240,7 +1284,7 @@ function render() {
   wireTips();
 }
 document.addEventListener("click", e => {
-  const b = e.target.closest("button"); if (!b) return;
+  const b = e.target.closest("button, tr[data-bttest]"); if (!b) return;   // строка недели в сравнении тоже кликается
   if (b.dataset.tab) { S.tab = b.dataset.tab; S.calSel = null; saveUi(); render(); scrollTo(0, 0); }
   else if (b.dataset.mode) { S.mode = b.dataset.mode; S.calSel = null; saveUi(); render(); }
   else if (b.dataset.pair) { S.pair = b.dataset.pair; saveUi(); render(); }
