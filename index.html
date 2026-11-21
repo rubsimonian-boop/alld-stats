@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#121211">
+<meta name="theme-color" content="#0a0d14">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Alld Stats">
@@ -14,34 +14,37 @@
 <style>
 :root {
   color-scheme: light;
-  --bg: #f4f3f0; --surface: #fcfcfb; --surface-2: #efeee9; --line: #e2e1dc;
-  --text: #0b0b0b; --text-2: #52514e; --text-3: #85847e;
-  --pos: #2a78d6; --neg: #e34948; --mid: #f0efec;
-  --pos-soft: rgba(42,120,214,.14); --neg-soft: rgba(227,73,72,.14);
-  --accent: #2a78d6; --good: #006300; --bad: #d03b3b;
+  /* палитра Al£d: слоновая кость, тёмно-синий, золото */
+  --bg: #f3efe6; --surface: #fffdf8; --surface-2: #efe9dc; --line: #e2d9c6;
+  --text: #121722; --text-2: #4a4f5c; --text-3: #8a8578;
+  --pos: #b0802a; --neg: #b5574a; --mid: #ece5d6;
+  --pos-soft: rgba(176,128,42,.14); --neg-soft: rgba(181,87,74,.14);
+  --accent: #b0802a; --good: #8a6a1f; --bad: #b5574a;
   --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.05);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --line: #2e2e2b;
-    --text: #f0efec; --text-2: #c3c2b7; --text-3: #8d8c84;
-    --pos: #3987e5; --neg: #e66767; --mid: #383835;
-    --pos-soft: rgba(57,135,229,.18); --neg-soft: rgba(230,103,103,.18);
-    --accent: #3987e5; --good: #0ca30c; --bad: #e66767;
+    --bg: #0a0d14; --surface: #11151f; --surface-2: #181e2b; --line: #252c3b;
+    --text: #ede8dc; --text-2: #c4bfb2; --text-3: #8a8e9b;
+    --pos: #d4a536; --neg: #c76a5e; --mid: #2a3142;
+    --pos-soft: rgba(212,165,54,.16); --neg-soft: rgba(199,106,94,.18);
+    --accent: #d4a536; --good: #d4a536; --bad: #c76a5e;
     --shadow: none;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --line: #2e2e2b;
-  --text: #f0efec; --text-2: #c3c2b7; --text-3: #8d8c84;
-  --pos: #3987e5; --neg: #e66767; --mid: #383835;
-  --pos-soft: rgba(57,135,229,.18); --neg-soft: rgba(230,103,103,.18);
-  --accent: #3987e5; --good: #0ca30c; --bad: #e66767;
+  --bg: #0a0d14; --surface: #11151f; --surface-2: #181e2b; --line: #252c3b;
+  --text: #ede8dc; --text-2: #c4bfb2; --text-3: #8a8e9b;
+  --pos: #d4a536; --neg: #c76a5e; --mid: #2a3142;
+  --pos-soft: rgba(212,165,54,.16); --neg-soft: rgba(199,106,94,.18);
+  --accent: #d4a536; --good: #d4a536; --bad: #c76a5e;
   --shadow: none;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+.alld { font-family: Georgia, "Times New Roman", serif; font-weight: 700; }
+.alld b { background: linear-gradient(180deg, #f6d880, #be8c28); -webkit-background-clip: text; background-clip: text; color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--text); touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; }
 body {
   font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
@@ -209,7 +212,7 @@ nav.tabs button.on { color: var(--accent); }
 .lock h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.02em; }
 .lock p { color: var(--text-2); margin: 0 0 20px; font-size: 14px; }
 .field { width: 100%; height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 0 14px; font-size: 16px; }
-.btn { width: 100%; height: 48px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; margin-top: 10px; }
+.btn { width: 100%; height: 48px; border-radius: 12px; background: linear-gradient(180deg, #f0cf7a, #c4952f); color: #0f131c; font-weight: 600; margin-top: 10px; }
 .btn.ghost { background: var(--surface); color: var(--text); border: 1px solid var(--line); }
 .err { color: var(--bad); font-size: 13px; min-height: 18px; margin-top: 8px; }
 .status { font-size: 12px; color: var(--text-3); text-align: center; padding: 4px 0 14px; }
@@ -319,7 +322,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
     </div>
   </header>
   <main class="wrap" id="view"></main>
-  <nav class="tabs"><div class="brand"><img src="icon.png" alt="">Alld Stats</div><div class="in" id="tabs"></div></nav>
+  <nav class="tabs"><div class="brand"><img src="icon.png" alt=""><span class="alld">Al<b>£</b>d</span> Stats</div><div class="in" id="tabs"></div></nav>
 </div>
 
 <div class="sheet-bg hidden" id="sheetBg"></div>
@@ -329,7 +332,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "18708ade80de";
+const APPV = "170d41b8c496";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
