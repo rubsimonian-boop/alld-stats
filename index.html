@@ -345,7 +345,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "7472b3c64254";
+const APPV = "0667f262e334";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -965,7 +965,7 @@ function viewIdeas() {
 
 /* ============================================================ Реал vs Бектест той же недели (тест в AlldView = неделя) */
 function weekMon(ds) { const d = new Date(ds + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); }
-function addDays(ds, n) { const d = new Date(ds + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function plusDays(ds, n) { const d = new Date(ds + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 function compareWeeks(bt) {
   const weeks = bt.tests.filter(n => /^Неделя /.test(n));
   if (!weeks.length) return "";
@@ -974,7 +974,7 @@ function compareWeeks(bt) {
   const rows = weeks.map(n => {
     const b = bt.trades.filter(t => t.test === n && okPair(t));
     const d0 = (b[0] || bt.ideas.find(i => i.test === n) || {}).date; if (!d0) return null;
-    const mon = weekMon(d0), end = addDays(mon, 6);
+    const mon = weekMon(d0), end = plusDays(mon, 6);
     return { n, mon, b: stats(b), r: stats(real.filter(t => t.date >= mon && t.date <= end)) };
   }).filter(Boolean);
   const diff = (a, b) => { const v = b - a; return `<span class="${cls(v)}">${v > 0 ? "+" : v < 0 ? "−" : ""}${num(Math.abs(v), 2)}R</span>`; };
@@ -990,7 +990,7 @@ function compareWeeks(bt) {
       ${line("R на сделку", expR(w.r), expR(w.b))}
       ${line("Плюсов / минусов", `${w.r.w} / ${w.r.l}`, `${w.b.w} / ${w.b.l}`)}
       ${line("Профит-фактор", num(w.r.pf, 2), num(w.b.pf, 2))}
-    </table><div class="sub" style="margin-top:8px">Реал — сделки с ${dLabel(w.mon)} по ${dLabel(addDays(w.mon, 4))}${S.pair !== "all" ? " · " + S.pair : ""}. Разница = бектест − реал.</div></div>`;
+    </table><div class="sub" style="margin-top:8px">Реал — сделки с ${dLabel(w.mon)} по ${dLabel(plusDays(w.mon, 4))}${S.pair !== "all" ? " · " + S.pair : ""}. Разница = бектест − реал.</div></div>`;
   }
   return `<div class="card"><h3>Реал vs Бектест по неделям</h3><table class="cmp">
     <tr><th>Неделя</th><th>Реал</th><th>Бектест</th><th>Разница</th></tr>
