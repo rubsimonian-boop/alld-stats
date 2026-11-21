@@ -345,7 +345,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "0667f262e334";
+const APPV = "187597bfaf9a";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -1162,7 +1162,7 @@ function openTrade(id) {
   const cm = markOf("c_" + t.id);
   h += `<div class="card"><h3>Комментарий</h3><textarea class="note" id="tradeCm" placeholder="Что думаешь об этой сделке">${esc(cm ? cm.n : "")}</textarea>
     <div class="hint" id="tradeCmHint">${LS.get("as_tok", "") ? "" : "Без токена GitHub (Настройки) комментарий только на этом устройстве"}</div></div>`;
-  h += shotsHtml(t.shots, ["Вход", "Разворот", "Выход"]);
+  h += shotsHtml(t.shots, ["Вход", "Открытие", "Разворот", "Выход"]);   // «Открытие» — скрин бектеста в момент входа
   if (!t.shots.length && t.src === "n") h += `<div class="status">Старая сделка из Notion — скринов здесь нет</div>`;
   if (t.src === "h") h += `<div class="status">Сделка из истории MT5 — в журнале её нет, скринов нет</div>`;
   openSheet(h);
