@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0a0d14">
+<meta name="theme-color" content="#0b0a08">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Alld Stats">
@@ -25,24 +25,29 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0a0d14; --surface: #11151f; --surface-2: #181e2b; --line: #252c3b;
-    --text: #ede8dc; --text-2: #c4bfb2; --text-3: #8a8e9b;
-    --pos: #d4a536; --neg: #c76a5e; --mid: #2a3142;
-    --pos-soft: rgba(212,165,54,.16); --neg-soft: rgba(199,106,94,.18);
-    --accent: #d4a536; --good: #d4a536; --bad: #c76a5e;
+    --bg: #0b0a08; --surface: #151410; --surface-2: #1e1c17; --line: #2b2822;
+    --text: #f3f0e8; --text-2: #c9c3b6; --text-3: #8c877c;
+    --pos: #e3b95c; --neg: #d0705f; --mid: #2b2822;
+    --pos-soft: rgba(227,185,92,.16); --neg-soft: rgba(208,112,95,.18);
+    --accent: #e3b95c; --good: #e3b95c; --bad: #d0705f;
     --shadow: none;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0a0d14; --surface: #11151f; --surface-2: #181e2b; --line: #252c3b;
-  --text: #ede8dc; --text-2: #c4bfb2; --text-3: #8a8e9b;
-  --pos: #d4a536; --neg: #c76a5e; --mid: #2a3142;
-  --pos-soft: rgba(212,165,54,.16); --neg-soft: rgba(199,106,94,.18);
-  --accent: #d4a536; --good: #d4a536; --bad: #c76a5e;
+  --bg: #0b0a08; --surface: #151410; --surface-2: #1e1c17; --line: #2b2822;
+  --text: #f3f0e8; --text-2: #c9c3b6; --text-3: #8c877c;
+  --pos: #e3b95c; --neg: #d0705f; --mid: #2b2822;
+  --pos-soft: rgba(227,185,92,.16); --neg-soft: rgba(208,112,95,.18);
+  --accent: #e3b95c; --good: #e3b95c; --bad: #d0705f;
   --shadow: none;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .card { background: linear-gradient(180deg, #1a1813, #121110); } }
+:root[data-theme="dark"] .card { background: linear-gradient(180deg, #1a1813, #121110); }
+.card { border-radius: 20px; }
+.a-today > .card { border-color: rgba(227,185,92,.32); background: linear-gradient(160deg, #24201a, #141310 60%) !important; }
+:root[data-theme="light"] .a-today > .card { background: var(--surface) !important; }
 .alld { font-family: Georgia, "Times New Roman", serif; font-weight: 700; }
 .alld b { background: linear-gradient(180deg, #f6d880, #be8c28); -webkit-background-clip: text; background-clip: text; color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--text); touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; }
@@ -332,7 +337,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "170d41b8c496";
+const APPV = "1da6d3cf026f";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
