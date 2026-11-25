@@ -345,7 +345,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "e0c72fa11cd8";
+const APPV = "cf7866d6dcf2";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -800,7 +800,7 @@ function viewOverview() {
   if (S.acc === "all" && (DATA.accounts || []).length)
     h += breakdown("Счета", DATA.accounts.map(a => ({ name: accName(a.id), ts: ts.filter(t => (t.accs || []).some(x => x.a === a.id)) }))
     );
-  if (S.pair === "all") h += breakdown("Пары", ["EURUSD", "GBPUSD", "XAUUSD"].map(p => ({ name: p, ts: ts.filter(t => t.pair === p) })));
+  if (S.pair === "all") h += breakdown("Пары", ["XAUUSD", "NDX100", "EURUSD", "GBPUSD"].map(p => ({ name: p, ts: ts.filter(t => t.pair === p) })));
   h += breakdown("Сессии", ["Лондон", "Нью-Йорк", "вне окна", "нет времени"].map(n => ({ name: n === "нет времени" ? "Без времени" : n[0].toUpperCase() + n.slice(1), ts: ts.filter(t => session(t) === n) })));
   if (S.mode !== "day") h += breakdown("Дни недели", DOW.slice(0, 5).map((n, i) => ({ name: n, ts: ts.filter(t => dowIdx(t.date) === i) })));
   h += breakdown("Как закрыта", [["Тейк", "тейк"], ["Стоп", "стоп"], ["Вручную", "вручную"]].map(([n, k]) => ({ name: n, ts: ts.filter(t => t.reason === k) })));
@@ -1272,7 +1272,7 @@ function render() {
   document.getElementById("modeSeg").parentElement.classList.toggle("hidden", S.tab === "home");
   document.getElementById("navRow").classList.toggle("hidden", mode === "all");
   document.getElementById("periodLbl").textContent = periodLabel(mode, anchor());
-  const pairs = ["all", "EURUSD", "GBPUSD", "XAUUSD"];
+  const pairs = ["all", "XAUUSD", "NDX100", "EURUSD", "GBPUSD"];
   const accs = DATA.accounts || [];
   document.getElementById("pairChips").innerHTML = pairs.map(p => `<button class="chip ${S.pair === p ? "on" : ""}" data-pair="${p}">${p === "all" ? "Все пары" : p}</button>`).join("");
   document.getElementById("accChips").classList.toggle("hidden", !accs.length || S.tab === "ideas" || S.tab === "bt");
