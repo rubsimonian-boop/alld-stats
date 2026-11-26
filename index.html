@@ -211,6 +211,7 @@ textarea.note { width: 100%; min-height: 70px; border-radius: 12px; border: 1px 
 .viewer button.nav.prev { left: 10px; right: auto; }
 .viewer button.nav.next { right: 10px; }
 .viewer button.nav:disabled { opacity: .15; }
+@media (pointer: coarse) { .viewer button.nav { display: none; } }   /* телефон: листается свайпом, кнопки не закрывают график */
 .viewer .vcap { position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 12px; right: 64px; color: #fff; font-size: 13px; text-shadow: 0 1px 3px #000; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .who { font-size: 13px; font-weight: 600; margin: 12px 0 8px; }
 .card .who:first-of-type { margin-top: 2px; }
@@ -354,7 +355,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "8ff629aa5dbb";
+const APPV = "05808b74b229";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
