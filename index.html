@@ -207,6 +207,15 @@ textarea.note { width: 100%; min-height: 70px; border-radius: 12px; border: 1px 
 .viewer { position: fixed; inset: 0; z-index: 60; background: #000; overflow: hidden; display: flex; align-items: center; touch-action: none; }
 .viewer img { width: 100%; height: auto; transform-origin: 0 0; will-change: transform; user-select: none; -webkit-user-drag: none; }
 .viewer button { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 12px; width: 40px; height: 40px; border-radius: 20px; background: rgba(255,255,255,.18); color: #fff; font-size: 22px; }
+.viewer button.nav { top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border-radius: 14px; font-size: 30px; background: rgba(255,255,255,.12); }
+.viewer button.nav.prev { left: 10px; right: auto; }
+.viewer button.nav.next { right: 10px; }
+.viewer button.nav:disabled { opacity: .15; }
+.viewer .vcap { position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 12px; right: 64px; color: #fff; font-size: 13px; text-shadow: 0 1px 3px #000; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .who { font-size: 13px; font-weight: 600; margin: 12px 0 8px; }
+.card .who:first-of-type { margin-top: 2px; }
+.card .who span { font-weight: 400; color: var(--text-3); }
+.card .shots + .who { margin-top: 16px; }
 
 /* tab bar */
 nav.tabs {
@@ -340,12 +349,12 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 
 <div class="sheet-bg hidden" id="sheetBg"></div>
 <div class="sheet hidden" id="sheet"><div class="wrap"><div class="grab"></div><div id="sheetBody"></div></div></div>
-<div class="viewer hidden" id="viewer"><img id="viewerImg" alt=""><button id="viewerX" aria-label="Закрыть">×</button></div>
+<div class="viewer hidden" id="viewer"><img id="viewerImg" alt=""><div class="vcap" id="viewerCap"></div><button class="nav prev" id="viewerPrev" aria-label="Предыдущий">‹</button><button class="nav next" id="viewerNext" aria-label="Следующий">›</button><button id="viewerX" aria-label="Закрыть">×</button></div>
 
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "dfde44112381";
+const APPV = "8ff629aa5dbb";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -1054,14 +1063,24 @@ function closeSheet(fromPop) {
 sheetBg.onclick = () => closeSheet();
 window.addEventListener("popstate", () => { if (!document.getElementById("viewer").classList.contains("hidden")) return closeViewer(true); closeSheet(true); });
 
-function shotsHtml(shots, kinds) {
+/* скрины: группа (объяснение / вход / выход) со временем, внутри — по паре: своя пара (направление) отдельно от модели (SPX, DXY) */
+const SHOT_ROLE = w => /SPX|US500|SP500/i.test(w) ? "модель" : /DXY/i.test(w) ? "доллар" : "";
+function shotsHtml(shots, kinds, names = {}, times = {}) {
   if (!shots || !shots.length) return "";
-  const order = { "4h": 0, "1h": 1, "30m": 2, "5m": 3, "3m": 4 };
+  const order = { "4h": 0, "1h": 1, "30m": 2, "5m": 3, "3m": 4, "1m": 5 };
   let h = "";
   for (const k of kinds) {
-    const list = shots.filter(s => s.k === k).sort((a, b) => (order[a.tf] ?? 9) - (order[b.tf] ?? 9) || (a.who === "DXY") - (b.who === "DXY"));
+    const list = shots.filter(s => s.k === k);
     if (!list.length) continue;
-    h += `<div class="card"><h3>${k === "Идея" ? "Скрины" : k}</h3><div class="shots">${list.map(s => `<div class="shot"><div class="cap">${esc(s.who)} · ${esc(s.tf)}</div><img data-f="${esc(s.f)}" alt="${esc(s.who + " " + s.tf)}"></div>`).join("")}</div></div>`;
+    const name = names[k] || (k === "Идея" ? "Скрины" : k);
+    const whos = [...new Set(list.map(s => s.who))].sort((a, b) => !!SHOT_ROLE(a) - !!SHOT_ROLE(b));
+    h += `<div class="card"><h3>${esc(name)}${times[k] ? ` · ${esc(times[k])}` : ""}</h3>`;
+    for (const w of whos) {
+      const ws = list.filter(s => s.who === w).sort((a, b) => (order[a.tf] ?? 9) - (order[b.tf] ?? 9));
+      if (whos.length > 1) h += `<div class="who">${esc(w)}${SHOT_ROLE(w) ? ` <span>· ${SHOT_ROLE(w)}</span>` : ""}</div>`;
+      h += `<div class="shots">${ws.map(s => `<div class="shot"><div class="cap">${esc(s.who)} · ${esc(s.tf)}</div><img data-f="${esc(s.f)}" data-cap="${esc(name + " · " + s.who + " " + s.tf)}" alt="${esc(s.who + " " + s.tf)}"></div>`).join("")}</div>`;
+    }
+    h += `</div>`;
   }
   return h;
 }
@@ -1072,11 +1091,34 @@ async function loadShots(root) {
     try {
       if (!IMG[f]) IMG[f] = URL.createObjectURL(new Blob([await openBox(await getBin(shotPath(f)))], { type: "image/jpeg" }));
       img.src = IMG[f];
-      img.onclick = () => openViewer(IMG[f]);
+      img.onclick = () => openViewer(root, img);
     } catch (e) { img.alt = "Скрин недоступен без сети"; img.style.minHeight = "40px"; }
   }
 }
-function openViewer(src) { resetViewer(); document.getElementById("viewerImg").src = src; document.getElementById("viewer").classList.remove("hidden"); history.pushState({ viewer: 1 }, ""); }
+/* просмотр: листаются все скрины открытой карточки по порядку (свайп, стрелки ← →, кнопки ‹ ›) */
+const VIEW = { list: [], i: 0 };
+async function showView() {
+  const it = VIEW.list[VIEW.i]; if (!it) return;
+  resetViewer();
+  document.getElementById("viewerCap").textContent = (VIEW.list.length > 1 ? `${VIEW.i + 1} / ${VIEW.list.length} · ` : "") + it.cap;
+  document.getElementById("viewerPrev").disabled = VIEW.i <= 0;
+  document.getElementById("viewerNext").disabled = VIEW.i >= VIEW.list.length - 1;
+  for (const b of [document.getElementById("viewerPrev"), document.getElementById("viewerNext")]) b.hidden = VIEW.list.length < 2;
+  const im = document.getElementById("viewerImg"), want = VIEW.i;
+  try {
+    if (!IMG[it.f]) IMG[it.f] = URL.createObjectURL(new Blob([await openBox(await getBin(shotPath(it.f)))], { type: "image/jpeg" }));
+    if (VIEW.i === want) im.src = IMG[it.f];
+  } catch (e) { /* без сети: остаётся прошлый */ }
+}
+function viewerStep(d) { const n = VIEW.i + d; if (n < 0 || n >= VIEW.list.length) return; VIEW.i = n; showView(); }
+function openViewer(root, img) {
+  VIEW.list = [...root.querySelectorAll("img[data-f]")].map(x => ({ f: x.dataset.f, cap: x.dataset.cap || x.alt }));
+  VIEW.i = Math.max(0, VIEW.list.findIndex(x => x.f === img.dataset.f));
+  showView();
+  document.getElementById("viewer").classList.remove("hidden"); history.pushState({ viewer: 1 }, "");
+}
+document.getElementById("viewerPrev").onclick = () => viewerStep(-1);
+document.getElementById("viewerNext").onclick = () => viewerStep(1);
 /* no page zoom (two fingers / double tap); the screenshot viewer has its own pinch-zoom */
 document.addEventListener("gesturestart", e => e.preventDefault());
 document.addEventListener("gesturechange", e => e.preventDefault());
@@ -1086,7 +1128,7 @@ document.addEventListener("touchend", e => { const n = Date.now(); if (n - lastT
 const resetViewer = (() => {
   const vw = document.getElementById("viewer"), img = document.getElementById("viewerImg");
   const pts = new Map();
-  let s = 1, x = 0, y = 0, st = null, lastTap = 0;
+  let s = 1, x = 0, y = 0, st = null, lastTap = 0, sw = null;   // sw — начало свайпа одним пальцем (листание)
   const apply = () => { img.style.transform = `translate(${x}px, ${y}px) scale(${s})`; };
   const clamp = () => {
     if (s <= 1) { s = 1; x = 0; y = 0; return; }
@@ -1103,6 +1145,7 @@ const resetViewer = (() => {
     if (e.target.closest("button")) return;
     vw.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); st = snap();
+    sw = pts.size === 1 ? { x: e.clientX, y: e.clientY } : null;
     if (pts.size === 1) {
       const now = Date.now();
       if (now - lastTap < 300) {  // double tap: zoom in at the finger / back out
@@ -1129,8 +1172,20 @@ const resetViewer = (() => {
     const qx = (e.clientX - img.offsetLeft - x) / s, qy = (e.clientY - img.offsetTop - y) / s;
     s = ns; x = e.clientX - img.offsetLeft - s * qx; y = e.clientY - img.offsetTop - s * qy; clamp(); apply();
   }, { passive: false });
-  window.addEventListener("keydown", e => { if (e.key === "Escape" && !vw.classList.contains("hidden")) closeViewer(); else if (e.key === "Escape") closeSheet(); });
-  const up = e => { pts.delete(e.pointerId); if (pts.size) st = snap(); clamp(); apply(); };
+  window.addEventListener("keydown", e => {
+    const open = !vw.classList.contains("hidden");
+    if (open && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); return viewerStep(e.key === "ArrowLeft" ? -1 : 1); }
+    if (e.key === "Escape" && open) closeViewer(); else if (e.key === "Escape") closeSheet();
+  });
+  const up = e => {
+    const one = pts.size === 1 && pts.has(e.pointerId);
+    pts.delete(e.pointerId); if (pts.size) st = snap(); clamp(); apply();
+    if (one && sw && s <= 1 && e.type === "pointerup") {   // не увеличено: свайп влево/вправо — следующий/предыдущий
+      const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { lastTap = 0; viewerStep(dx < 0 ? 1 : -1); }
+    }
+    if (!pts.size) sw = null;
+  };
   vw.addEventListener("pointerup", up); vw.addEventListener("pointercancel", up);
   return () => { pts.clear(); s = 1; x = 0; y = 0; apply(); };
 })();
@@ -1162,7 +1217,11 @@ function openTrade(id) {
   const cm = markOf("c_" + t.id);
   h += `<div class="card"><h3>Комментарий</h3><textarea class="note" id="tradeCm" placeholder="Что думаешь об этой сделке">${esc(cm ? cm.n : "")}</textarea>
     <div class="hint" id="tradeCmHint">${LS.get("as_tok", "") ? "" : "Без токена GitHub (Настройки) комментарий только на этом устройстве"}</div></div>`;
-  h += shotsHtml(t.shots, ["Вход", "Открытие", "Разворот", "Выход"]);   // «Открытие» — скрин бектеста в момент входа
+  // бектест: «Вход» — скрины объяснения (до сделки), «Открытие» — момент входа; у настоящих «Вход» — сам вход
+  const bt = t.src === "b", ct = t.ctime ? `${t.cdate && t.cdate !== t.date ? dLabel(t.cdate) + " " : ""}${t.ctime}` : "";
+  h += shotsHtml(t.shots, ["Вход", "Открытие", "Разворот", "Выход"],
+    bt ? { "Вход": "Объяснение (до входа)", "Открытие": "Вход" } : {},
+    bt ? { "Открытие": t.time, "Выход": ct } : { "Вход": t.time, "Выход": ct });
   if (!t.shots.length && t.src === "n") h += `<div class="status">Старая сделка из Notion — скринов здесь нет</div>`;
   if (t.src === "h") h += `<div class="status">Сделка из истории MT5 — в журнале её нет, скринов нет</div>`;
   openSheet(h);
