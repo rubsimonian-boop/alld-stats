@@ -355,7 +355,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "05808b74b229";
+const APPV = "15e4121c3621";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -1190,7 +1190,9 @@ const resetViewer = (() => {
   vw.addEventListener("pointerup", up); vw.addEventListener("pointercancel", up);
   return () => { pts.clear(); s = 1; x = 0; y = 0; apply(); };
 })();
-function closeViewer(fromPop) { document.getElementById("viewer").classList.add("hidden"); if (!fromPop) history.back(); }
+// × / Esc → шаг назад в истории; прячет просмотр уже popstate. Раньше прятали сразу, и popstate думал, что открыта
+// только карточка, — закрывал и её (2026-11-27)
+function closeViewer(fromPop) { if (!fromPop) return history.back(); document.getElementById("viewer").classList.add("hidden"); }
 document.getElementById("viewerX").onclick = () => closeViewer();
 
 function openTrade(id) {
