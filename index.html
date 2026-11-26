@@ -345,7 +345,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "cf7866d6dcf2";
+const APPV = "dfde44112381";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -828,7 +828,7 @@ function buckets(mode, a, ts) {
 function tradeRow(t) {
   const acc = S.acc === "all" && t.accs && t.accs.length ? t.accs.map(x => accName(x.a)).join(" + ") : "";
   const l2 = [t.time ? t.time + (t.ctime ? "→" + t.ctime : "") : dLabel(t.date), session(t) !== "нет времени" ? session(t) : "", t.reason || (t.open ? "открыта" : ""), riskOf(t) ? "риск " + riskOf(t) : "", acc].filter(Boolean).join(" · ");
-  return `<button class="item" data-trade="${esc(t.id)}"><div class="main"><div class="l1">${t.pair} <span class="badge">${sideRu(t.side)}</span>${t.test ? ` <span class="badge" style="background:#ff980033;color:#ff9800">ошибка теста</span>` : ""}${markOf("c_" + t.id) ? ` <span title="Есть комментарий">💬</span>` : ""}</div>
+  return `<button class="item" data-trade="${esc(t.id)}"><div class="main"><div class="l1">${t.pair} <span class="badge">${sideRu(t.side)}</span>${t.test === true ? ` <span class="badge" style="background:#ff980033;color:#ff9800">ошибка теста</span>` : ""}${markOf("c_" + t.id) ? ` <span title="Есть комментарий">💬</span>` : ""}</div>
     <div class="l2">${esc(l2)}</div></div><div class="rv ${cls(t.r)}">${t.open ? "…" : fmtR(t.r)}${pctLine([t], true) ? `<small style="font-weight:600">${pctLine([t], true)}</small>` : t.num ? `<small>№${t.num}</small>` : ""}</div></button>`;
 }
 function tradeList(ts, flat) {
