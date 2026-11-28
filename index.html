@@ -255,6 +255,36 @@ nav.tabs button.on { color: var(--accent); }
 .tbl td:first-child, .tbl th:first-child { text-align: left; }
 details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin-top: 12px; }
 
+/* блокнот: мысли о системе, идеи, примеры со скринами */
+.nbtop { display: flex; gap: 8px; align-items: center; padding: 0 0 12px; }
+.nbtop .chips { flex: 1; min-width: 0; padding: 0; }
+.nbadd { height: 32px; padding: 0 14px; border-radius: 16px; background: linear-gradient(180deg, #f0cf7a, #c4952f); color: #0f131c; font-weight: 600; font-size: 13px; white-space: nowrap; flex: none; }
+.nbtag { font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 600; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+.nbtag.ex { background: var(--pos-soft); color: var(--pos); }
+.nbtag.err { background: var(--neg-soft); color: var(--neg); }
+.nbtag.idea { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.nbitem { align-items: flex-start; }
+.nbitem .nbt { font-weight: 600; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nbthumb { position: relative; width: 76px; height: 56px; border-radius: 9px; overflow: hidden; background: var(--surface-2); flex: none; }
+.nbthumb img, .nbth img, .nbtile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.nbthumb span { position: absolute; right: 4px; bottom: 4px; background: rgba(0,0,0,.66); color: #fff; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 6px; }
+.nbg .sbimgs { margin-bottom: 10px; }
+.nbg .chips { padding-bottom: 0; }
+.nbg .chip.nbth { width: 72px; height: 50px; padding: 0; overflow: hidden; border-radius: 9px; border: 2px solid transparent; background: var(--surface-2); }
+.nbg .chip.nbth.on { border-color: var(--accent); background: var(--surface-2); }
+.card .nbseg { width: auto; margin-bottom: 10px; }
+.nbseg button { height: 36px; }
+.nbseg button.on { background: linear-gradient(180deg, #f0cf7a, #c4952f); color: #0f131c; }
+textarea.nbtext { min-height: 160px; }
+.nbtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 4px; }
+.nbtiles:empty { display: none; }
+.nbtile { position: relative; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; background: var(--surface-2); }
+.nbtile .nbx { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 14px; background: rgba(0,0,0,.66); color: #fff; font-size: 17px; line-height: 1; }
+.nbtile .nbnew { position: absolute; left: 4px; bottom: 4px; background: rgba(0,0,0,.66); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 6px; }
+.nbdrop { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.nbbtns { display: flex; gap: 8px; }
+.nbbtns .btn { margin-top: 0; }
+
 /* ============ computer: menu on the left, wide pages in columns, details in a side panel */
 .brand { display: none; }
 .cols-home, .grid2, .grid3 { display: block; }
@@ -362,7 +392,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "fa7a3f67e03e";
+const APPV = "c1097c2b7ba5";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -399,11 +429,11 @@ async function getBin(path, fresh) {
 /* ============================================================ data */
 let DATA = { trades: [], ideas: [] }, META = null, MARKS = LS.get("as_marks", {});
 const S = Object.assign({ tab: "home", curve: "m", mode: "week", anchor: null, pair: "all", acc: "all", calSel: null, ideaF: "no" }, LS.get("as_ui", {}));
-if (!["home", "stats", "trades", "ideas", "bt"].includes(S.tab)) S.tab = "home";
+if (!["home", "stats", "trades", "ideas", "bt", "nb"].includes(S.tab)) S.tab = "home";
 if (!S.btTest) S.btTest = "all";
 if (S.acc === "none") S.acc = "all";
 function saveUi() {
-  LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit, btTest: S.btTest, btF: S.btF });
+  LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit, btTest: S.btTest, btF: S.btF, nbF: S.nbF });
   // фильтры (пара, счёт, период, график) — общие для всех устройств через токен; вкладка — у каждого своя
   if (!SYNCED) return;
   const n = JSON.stringify({ mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit });
@@ -415,7 +445,7 @@ function applySynced() {  // фильтры и тема, изменённые н
   const u = markOf("_ui");
   if (u && u.n && u.t > LS.get("as_ui_t", 0)) {
     try { Object.assign(S, JSON.parse(u.n)); } catch (e) {}
-    LS.set("as_ui_t", u.t); LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit });
+    LS.set("as_ui_t", u.t); LS.set("as_ui", { tab: S.tab, mode: S.mode, pair: S.pair, acc: S.acc, ideaF: S.ideaF, curve: S.curve, unit: S.unit, btTest: S.btTest, btF: S.btF, nbF: S.nbF });
   }
   const th = markOf("_theme");
   if (th && th.n && th.t > LS.get("as_th_t", 0)) { LS.set("as_theme", th.n); LS.set("as_th_t", th.t); applyTheme(); }
@@ -508,9 +538,12 @@ function setMark(id, patch) {
   const m = Object.assign({}, cur, patch, { t: Date.now() });
   if (m.s == null && !m.n) m.del = 1; else delete m.del;
   MARKS[id] = m; LS.set("as_marks", MARKS);
-  clearTimeout(setMark.tm); setMark.tm = setTimeout(() => syncMarks(true).then(() => {
+  clearTimeout(setMark.tm); setMark.tm = setTimeout(async () => {
+    await syncMarks(true);
+    // GitHub отказал из-за одновременной записи (ПК залил своё, скрин блокнота) — ещё раз через 3 с
+    if (SYNC.startsWith("Не сохранилось") && !/нет сети|токен/.test(SYNC)) { await new Promise(z => setTimeout(z, 3000)); await syncMarks(true); }
     render(); for (const id of ["ideaCmHint", "tradeCmHint"]) { const h = document.getElementById(id); if (h) h.textContent = SYNC; }
-  }), 800);
+  }, 800);
 }
 function markOf(id) { const m = MARKS[id]; return m && !m.del ? m : null; }
 
@@ -1128,12 +1161,35 @@ function initShots(root) {
   }
 }
 const IMG = {};
+/* скрин: с сайта (или из кэша без сети); скрин блокнота, который Pages ещё не выложил (или ПК ещё не забрал), — прямо с GitHub по токену */
+const NB_SHOT = /^[0-9a-f]{32}$/;   // имена скринов блокнота: 32 знака (у скринов робота 24) — удалять можно только такие
+const SW_CACHE = "alld-stats-v2";   // как в sw.js
+const absUrl = p => new URL(p, location.href).href;
+function ghApi(path, opt = {}) {
+  return fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.name}/${path}`, Object.assign({}, opt, {
+    headers: Object.assign({ Authorization: "Bearer " + LS.get("as_tok", ""), Accept: "application/vnd.github+json" }, opt.headers || {}), cache: "no-store" }));
+}
+async function shotBytes(f) {
+  try { return await openBox(await getBin(shotPath(f))); }
+  catch (e) {
+    if (!NB_SHOT.test(f) || !REPO || !LS.get("as_tok", "")) throw e;
+    const r = await ghApi(`contents/s/${f}.bin`, { headers: { Accept: "application/vnd.github.raw" } });
+    if (!r.ok) throw e;
+    const buf = await r.arrayBuffer();
+    try { await (await caches.open(SW_CACHE)).put(absUrl(shotPath(f)), new Response(buf.slice(0))); } catch (x) {}
+    return openBox(buf);
+  }
+}
+async function shotUrl(f) {
+  if (!IMG[f]) IMG[f] = URL.createObjectURL(new Blob([await shotBytes(f)], { type: "image/jpeg" }));
+  return IMG[f];
+}
 async function loadShots(root) {
   initShots(root);
   for (const img of root.querySelectorAll("img[data-f]")) {
     const f = img.dataset.f;
     try {
-      if (!IMG[f]) IMG[f] = URL.createObjectURL(new Blob([await openBox(await getBin(shotPath(f)))], { type: "image/jpeg" }));
+      await shotUrl(f);
       img.src = IMG[f];
       img.onclick = () => openViewer(root, img);
     } catch (e) { img.alt = "Скрин недоступен без сети"; img.style.minHeight = "40px"; }
@@ -1151,7 +1207,7 @@ async function showView() {
   for (const b of [document.getElementById("viewerPrev"), document.getElementById("viewerNext")]) b.hidden = VIEW.list.length < 2;
   const im = document.getElementById("viewerImg"), want = VIEW.i;
   try {
-    if (!IMG[it.f]) IMG[it.f] = URL.createObjectURL(new Blob([await openBox(await getBin(shotPath(it.f)))], { type: "image/jpeg" }));
+    await shotUrl(it.f);
     if (VIEW.i === want) im.src = IMG[it.f];
   } catch (e) { /* без сети: остаётся прошлый */ }
 }
@@ -1307,6 +1363,202 @@ function openArchive() {
     <div class="hint" style="margin:0 0 12px">Скрины, которые не привязаны к сделке. Оригиналы на компьютере не хранятся — только здесь.</div>${html}`);
   loadShots(sheetBody);
 }
+
+/* ============================================================ блокнот (2026-11-28, пользователь: «где мне всё это писать —
+   мысли о системе, идеи, примеры со скринами»). Запись = отметка nb_<id> (как комментарии: с токеном одна и та же на телефоне и ПК),
+   n = JSON {tag, title, text, shots: [имя скрина], c: когда создана}. Скрины: сжаты и зашифрованы здесь же, лежат в s/ основного
+   репозитория под случайным именем из 32 знаков; заливаются только по «Сохранить» */
+const NB_TAGS = [["think", "Мысль"], ["ex", "Пример"], ["err", "Ошибка"], ["idea", "Идея"]];
+const nbTag = k => NB_TAGS.find(x => x[0] === k) || NB_TAGS[0];
+function nbNotes() {
+  const out = [];
+  for (const k in MARKS) {
+    if (!k.startsWith("nb_")) continue;
+    const m = markOf(k); if (!m || !m.n) continue;
+    try { out.push(Object.assign({ shots: [] }, JSON.parse(m.n), { id: k, t: m.t })); } catch (e) {}
+  }
+  return out.sort((a, b) => (b.c || 0) - (a.c || 0));
+}
+const nbDate = c => { const d = new Date(c || Date.now()); return `${d.getDate()} ${MON[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? " " + d.getFullYear() : ""}`; };
+function viewNotebook() {
+  const all = nbNotes(), f = NB_TAGS.some(x => x[0] === S.nbF) ? S.nbF : "all";
+  const list = f === "all" ? all : all.filter(n => n.tag === f);
+  let h = `<div class="nbtop"><div class="chips">${[["all", "Все"]].concat(NB_TAGS).map(([k, n]) => {
+    const c = k === "all" ? all.length : all.filter(x => x.tag === k).length;
+    return `<button class="chip ${f === k ? "on" : ""}" data-nbf="${k}">${n}${c ? " " + c : ""}</button>`;
+  }).join("")}</div><button class="nbadd" data-nbnew>+ Запись</button></div>`;
+  if (SYNC.startsWith("Не сохранилось")) h += `<div class="hint" style="color:var(--bad);margin:-4px 0 10px">${esc(SYNC)}</div>`;
+  if (!list.length) return h + `<div class="card"><div class="empty">${all.length ? "Таких записей нет" : "Здесь твои мысли о системе, идеи и примеры со скринами.<br>Нажми «+ Запись»."}</div></div>`;
+  return h + `<div class="list igrid">` + list.map(n => {
+    const [k, name] = nbTag(n.tag), sh = n.shots || [];
+    return `<button class="item nbitem" data-nb="${esc(n.id)}"><div class="main"><div class="l1"><span class="nbtag ${k}">${name}</span><span class="badge">${nbDate(n.c)}</span></div>
+      ${n.title ? `<div class="nbt">${esc(n.title)}</div>` : ""}${n.text ? `<div class="idea-text">${esc(n.text)}</div>` : ""}</div>
+      ${sh.length ? `<div class="nbthumb"><img data-tf="${esc(sh[0])}" alt="">${sh.length > 1 ? `<span>${sh.length}</span>` : ""}</div>` : ""}</button>`;
+  }).join("") + `</div>`;
+}
+async function loadThumbs(root) {   // миниатюры (img data-tf): не попадают в просмотр во весь экран
+  for (const img of root.querySelectorAll("img[data-tf]")) {
+    try { img.src = await shotUrl(img.dataset.tf); } catch (e) { /* без сети — пусто */ }
+  }
+}
+// скрины записи: один большой, под ним миниатюры; нажал на большой — во весь экран, листаются все
+function nbGallery(shots, cap) {
+  if (!shots || !shots.length) return "";
+  const n = shots.length;
+  return `<div class="card sbox nbg" data-sbox><h3>Скрины${n > 1 ? " · " + n : ""}</h3><div class="sbimgs">${shots.map((f, i) =>
+    `<div class="shot" data-ss="${i}" data-sm="0"><img data-f="${esc(f)}" data-cap="${esc(cap)}" alt="${esc(cap)}"></div>`).join("")}</div>
+    <div class="chips${n < 2 ? " one" : ""}" data-sm="0">${shots.map((f, i) => `<button class="chip nbth" data-ss="${i}" data-lab="${i}"><img data-tf="${esc(f)}" alt=""></button>`).join("")}</div></div>`;
+}
+function openNote(id) {
+  const n = nbNotes().find(x => x.id === id); if (!n) return;
+  const [k, name] = nbTag(n.tag);
+  openSheet(`<div class="shead"><div class="t">${esc(n.title || name)}</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
+    <div class="card"><div style="display:flex;gap:6px;align-items:center"><span class="nbtag ${k}">${name}</span><span class="badge">${nbDate(n.c)}</span></div>
+      ${n.text ? `<div class="text" style="margin-top:12px">${esc(n.text)}</div>` : ""}</div>
+    ${nbGallery(n.shots, n.title || name)}
+    <div class="nbbtns"><button class="btn ghost" id="nbEdit">Изменить</button><button class="btn ghost" id="nbDel" style="color:var(--bad)">Удалить</button></div>`);
+  document.getElementById("nbEdit").onclick = () => { closeSheet(); setTimeout(() => openNoteEditor(id), 300); };
+  document.getElementById("nbDel").onclick = () => {
+    if (!confirm("Удалить запись" + ((n.shots || []).length ? " вместе со скринами" : "") + "?")) return;
+    setMark(id, { n: "" });
+    nbDelLater(n.shots || []);
+    delete NBDRAFT[id]; closeSheet(); render();
+  };
+  loadShots(sheetBody); loadThumbs(sheetBody);
+}
+/* редактор. Несохранённое не теряется: закрыл карточку и открыл снова — всё на месте (новая запись — даже после перезагрузки, без скринов) */
+const NBDRAFT = {};
+let NBCUR = null;
+async function nbPrep(file) {   // сжать (длинная сторона до 2200) и зашифровать
+  const src = URL.createObjectURL(file);
+  try {
+    const im = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error("не картинка")); i.src = src; });
+    const k = Math.min(1, 2200 / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+    return { p: await sealBox(new Uint8Array(await blob.arrayBuffer())), url: URL.createObjectURL(blob) };
+  } finally { URL.revokeObjectURL(src); }
+}
+async function nbUpload(bytes) {   // новый файл s/<32 знака>.bin; 409 — кто-то записал в ту же секунду (ПК или отметки), повторить
+  const name = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, "0")).join("");
+  const body = JSON.stringify({ message: "note shot", content: b64.enc(bytes) });
+  for (let i = 0; ; i++) {
+    const r = await ghApi(`contents/s/${name}.bin`, { method: "PUT", body });
+    if (r.ok) break;
+    if (r.status !== 409 || i >= 2) throw new Error(ghWhy(r.status, "write"));
+    await new Promise(z => setTimeout(z, 1500));
+  }
+  try { await (await caches.open(SW_CACHE)).put(absUrl(shotPath(name)), new Response(bytes)); } catch (e) {}   // видно сразу, до выкладки на сайт
+  return name;
+}
+async function nbDelShot(f) {   // по возможности: скрин убран из записи или запись удалена
+  if (!NB_SHOT.test(f) || !REPO || !LS.get("as_tok", "")) return;
+  try {
+    const r = await ghApi(`contents/s/${f}.bin`); if (!r.ok) return;
+    const { sha } = await r.json();
+    for (let i = 0; i < 3; i++) {
+      const d = await ghApi(`contents/s/${f}.bin`, { method: "DELETE", body: JSON.stringify({ message: "note shot removed", sha }) });
+      if (d.ok || d.status !== 409) break;
+      await new Promise(z => setTimeout(z, 1500));
+    }
+    try { await (await caches.open(SW_CACHE)).delete(absUrl(shotPath(f))); } catch (e) {}
+  } catch (e) {}
+}
+// удалять после записи отметок и по одному: одновременные коммиты GitHub отклоняет
+function nbDelLater(list) { list = list.slice(); if (list.length) setTimeout(async () => { for (const f of list) await nbDelShot(f); }, 4000); }
+function openNoteEditor(id) {
+  const n = id ? nbNotes().find(x => x.id === id) : null;
+  if (id && !n) return;
+  const key = id || "new", saved = !id ? LS.get("as_nbnew", null) : null;
+  const st = NBDRAFT[key] || (NBDRAFT[key] = {
+    id, c: n ? n.c : 0, removed: [],
+    tag: n ? n.tag : (saved && saved.tag) || (NB_TAGS.some(x => x[0] === S.nbF) ? S.nbF : "think"),
+    title: n ? n.title || "" : (saved && saved.title) || "", text: n ? n.text || "" : (saved && saved.text) || "",
+    shots: n ? (n.shots || []).map(f => ({ f })) : [] });
+  NBCUR = st;
+  const tok = !!(REPO && LS.get("as_tok", ""));
+  openSheet(`<div class="shead"><div class="t">${id ? "Изменить запись" : "Новая запись"}</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
+    <div class="card"><div class="seg nbseg">${NB_TAGS.map(([k, nm]) => `<button data-nbtag="${k}" class="${st.tag === k ? "on" : ""}">${nm}</button>`).join("")}</div>
+      <input class="field" id="nbTitle" placeholder="Заголовок (можно без него)" value="${esc(st.title)}" autocomplete="off">
+      <textarea class="note nbtext" id="nbText" placeholder="Что думаю, что вижу на скрине, почему это работает…">${esc(st.text)}</textarea></div>
+    <div class="card" id="nbShotCard"><h3>Скрины</h3><div class="nbtiles" id="nbShots"></div>
+      <input type="file" id="nbFile" accept="image/*" multiple hidden>
+      <button class="btn ghost" id="nbAddShot">Добавить скрин</button>
+      <div class="hint" id="nbShotHint">${!tok ? "Скрины сохраняются только с токеном GitHub: Настройки → Синхронизация" : DESK() ? "Можно вставить скрин Ctrl+V или перетащить файл сюда" : ""}</div></div>
+    <button class="btn" id="nbSave">Сохранить</button>
+    <div class="hint" id="nbHint" style="text-align:center">${tok ? "" : "Без токена GitHub запись будет только на этом устройстве"}</div>`);
+  const $ = i => document.getElementById(i);
+  const keepNew = () => { if (!id) LS.set("as_nbnew", { tag: st.tag, title: st.title, text: st.text }); };
+  const grow = () => { const t = $("nbText"); t.style.height = "auto"; t.style.height = Math.max(160, t.scrollHeight + 2) + "px"; };
+  sheetBody.querySelectorAll("[data-nbtag]").forEach(b => b.onclick = () => {
+    st.tag = b.dataset.nbtag; sheetBody.querySelectorAll("[data-nbtag]").forEach(x => x.classList.toggle("on", x === b)); keepNew();
+  });
+  $("nbTitle").oninput = e => { st.title = e.target.value; keepNew(); };
+  $("nbText").oninput = e => { st.text = e.target.value; grow(); keepNew(); };
+  grow();
+  nbDraw();
+  $("nbAddShot").onclick = () => $("nbFile").click();
+  $("nbFile").onchange = e => { nbAddFiles([...e.target.files]); e.target.value = ""; };
+  $("nbSave").onclick = () => nbSave(st, key);
+}
+function nbDraw() {
+  const box = document.getElementById("nbShots"), st = NBCUR; if (!box || !st) return;
+  box.innerHTML = st.shots.map((s, i) => `<div class="nbtile"><img ${s.url ? `src="${s.url}"` : `data-tf="${esc(s.f)}"`} alt="">${s.p ? `<span class="nbnew">новый</span>` : ""}<button class="nbx" data-nbx="${i}" aria-label="Убрать скрин">×</button></div>`).join("");
+  box.querySelectorAll("[data-nbx]").forEach(b => b.onclick = () => {
+    const s = st.shots.splice(+b.dataset.nbx, 1)[0];
+    if (s.f) st.removed.push(s.f);
+    nbDraw();
+  });
+  loadThumbs(box);
+}
+async function nbAddFiles(files) {
+  const st = NBCUR, hint = document.getElementById("nbShotHint");
+  files = files.filter(f => /^image\//.test(f.type)); if (!st || !files.length) return;
+  if (!(REPO && LS.get("as_tok", ""))) { if (hint) hint.textContent = "Скрины сохраняются только с токеном GitHub: Настройки → Синхронизация"; return; }
+  if (hint) hint.textContent = "Готовлю скрин…";
+  for (const f of files) {
+    try { st.shots.push(await nbPrep(f)); } catch (e) { if (hint) hint.textContent = "Не открылся файл " + f.name; continue; }
+  }
+  if (hint && hint.textContent === "Готовлю скрин…") hint.textContent = "Скрины зальются, когда нажмёшь «Сохранить»";
+  nbDraw();
+}
+async function nbSave(st, key) {
+  const btn = document.getElementById("nbSave"), hint = document.getElementById("nbHint");
+  if (!st.title.trim() && !st.text.trim() && !st.shots.length) { hint.textContent = "Пустая запись: напиши текст или добавь скрин"; return; }
+  const pend = st.shots.filter(s => s.p);
+  btn.disabled = true;
+  try {
+    for (let i = 0; i < pend.length; i++) {
+      btn.textContent = pend.length > 1 ? `Загружаю скрин ${i + 1} из ${pend.length}…` : "Загружаю скрин…";
+      const f = await nbUpload(pend[i].p);
+      IMG[f] = pend[i].url; pend[i].f = f; delete pend[i].p;   // уже залитый при повторе второй раз не грузится
+    }
+  } catch (e) {
+    btn.disabled = false; btn.textContent = "Сохранить";
+    hint.textContent = "Не сохранилось: " + (e.message === "Failed to fetch" ? "нет сети" : e.message || "ошибка") + ". Попробуй ещё раз";
+    return;
+  }
+  const id = st.id || "nb_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  setMark(id, { n: JSON.stringify({ tag: st.tag, title: st.title.trim(), text: st.text.trim(), shots: st.shots.map(s => s.f), c: st.c || Date.now() }) });
+  nbDelLater(st.removed);
+  delete NBDRAFT[key]; NBCUR = null; if (key === "new") LS.del("as_nbnew");
+  closeSheet(); render();
+}
+// ПК: вставить скрин (Ctrl+V) или перетащить файл, пока открыт редактор
+document.addEventListener("paste", e => {
+  if (!NBCUR || !document.getElementById("nbShots")) return;
+  const fs = [...((e.clipboardData && e.clipboardData.files) || [])].filter(f => /^image\//.test(f.type));
+  if (fs.length) { e.preventDefault(); nbAddFiles(fs); }
+});
+for (const ev of ["dragover", "dragleave", "drop"]) sheet.addEventListener(ev, e => {
+  const card = document.getElementById("nbShotCard"); if (!card || !NBCUR) return;
+  if (!e.dataTransfer || ![...e.dataTransfer.types].includes("Files")) return;   // текст перетаскивается как обычно
+  e.preventDefault();
+  card.classList.toggle("nbdrop", ev === "dragover");
+  if (ev === "drop") nbAddFiles([...((e.dataTransfer && e.dataTransfer.files) || [])]);
+});
+
 function openSettings() {
   const tok = LS.get("as_tok", "");
   openSheet(`<div class="shead"><div class="t">Настройки</div><button class="icon-btn" data-close aria-label="Закрыть">✕</button></div>
@@ -1341,7 +1593,8 @@ function openSettings() {
   const arc = document.getElementById("arcBtn");
   if (arc) arc.onclick = () => { closeSheet(); setTimeout(openArchive, 300); };
   document.getElementById("offBtn").onclick = async () => {
-    const list = [...new Set(DATA.trades.concat(DATA.ideas).flatMap(x => (x.shots || []).map(s => s.f)).concat((DATA.archive || []).map(a => a.f)))];
+    const list = [...new Set(DATA.trades.concat(DATA.ideas).flatMap(x => (x.shots || []).map(s => s.f)).concat((DATA.archive || []).map(a => a.f))
+      .concat(nbNotes().flatMap(n => n.shots || [])))];
     const hint = document.getElementById("offHint"), btn = document.getElementById("offBtn");
     btn.disabled = true; let ok = 0, bad = 0;
     for (let i = 0; i < list.length; i += 6) {
@@ -1366,13 +1619,15 @@ const TABS = [
   ["trades", "Сделки", '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>'],
   ["bt", "Бектест", '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>'],
   ["ideas", "Идеи", '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>'],
+  ["nb", "Блокнот", '<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>'],
 ];
 function render() {
   TIPS = [];
   document.getElementById("tabs").innerHTML = TABS.map(([k, n, ic]) => `<button class="${S.tab === k ? "on" : ""}" data-tab="${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ic}</svg>${n}</button>`).join("");
   document.getElementById("viewTitle").textContent = TABS.find(x => x[0] === S.tab)[1];
-  const showPeriod = S.tab !== "ideas" && S.tab !== "bt";
+  const nb = S.tab === "nb", showPeriod = S.tab !== "ideas" && S.tab !== "bt" && !nb;
   document.getElementById("periodBox").classList.toggle("hidden", !showPeriod);
+  document.getElementById("pairChips").classList.toggle("hidden", nb);   // блокнот — без пар, счетов и периода
   const mode = S.tab === "home" ? "month" : S.mode;
   document.getElementById("modeSeg").innerHTML = MODES.map(([k, n]) => `<button class="${mode === k ? "on" : ""}" data-mode="${k}">${n}</button>`).join("");
   document.getElementById("modeSeg").parentElement.classList.toggle("hidden", S.tab === "home");
@@ -1381,13 +1636,14 @@ function render() {
   const pairs = ["all", "XAUUSD", "NDX100", "EURUSD", "GBPUSD"];
   const accs = DATA.accounts || [];
   document.getElementById("pairChips").innerHTML = pairs.map(p => `<button class="chip ${S.pair === p ? "on" : ""}" data-pair="${p}">${p === "all" ? "Все пары" : p}</button>`).join("");
-  document.getElementById("accChips").classList.toggle("hidden", !accs.length || S.tab === "ideas" || S.tab === "bt");
+  document.getElementById("accChips").classList.toggle("hidden", !accs.length || S.tab === "ideas" || S.tab === "bt" || nb);
   document.getElementById("accChips").innerHTML = [["all", "Все счета"]].concat(accs.map(a => [a.id, accName(a.id)]))
     .map(([k, n]) => `<button class="chip ${S.acc === k ? "on" : ""}" data-acc="${esc(k)}">${esc(n)}</button>`).join("");
   const v = document.getElementById("view");
-  v.innerHTML = (S.tab === "home" ? viewHome() : S.tab === "stats" ? viewOverview() : S.tab === "trades" ? viewTrades() : S.tab === "bt" ? viewBacktest() : viewIdeas())
+  v.innerHTML = (S.tab === "home" ? viewHome() : S.tab === "stats" ? viewOverview() : S.tab === "trades" ? viewTrades() : S.tab === "bt" ? viewBacktest() : nb ? viewNotebook() : viewIdeas())
     + `<div class="status">${NET ? "" : "Нет сети — показываю сохранённое. "}${META ? "Обновлено " + esc(META.updated) : ""}</div>`;
   wireTips();
+  if (nb) loadThumbs(v);
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("button, tr[data-bttest]"); if (!b) return;   // строка недели в сравнении тоже кликается
@@ -1403,6 +1659,9 @@ document.addEventListener("click", e => {
   else if (b.dataset.day) { S.calSel = S.calSel === b.dataset.day ? null : b.dataset.day; render(); }
   else if (b.dataset.trade) { if (!sheet.classList.contains("hidden")) { closeSheet(); setTimeout(() => openTrade(b.dataset.trade), 300); } else openTrade(b.dataset.trade); }
   else if (b.dataset.idea) openIdea(b.dataset.idea);
+  else if (b.dataset.nbf) { S.nbF = b.dataset.nbf; saveUi(); render(); }
+  else if (b.dataset.nb) openNote(b.dataset.nb);
+  else if (b.hasAttribute("data-nbnew")) openNoteEditor(null);
   else if (b.hasAttribute("data-close")) closeSheet();
 });
 document.getElementById("prev").onclick = () => S.tab === "home" ? shiftMonth(-1) : shift(-1);
@@ -1437,7 +1696,7 @@ let rsz; window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setT
   v.addEventListener("touchstart", e => { if (e.target.closest(".chart")) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
   v.addEventListener("touchend", e => {
     if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
-    if (Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy) && S.tab !== "ideas" && S.tab !== "bt" && (S.tab === "home" || S.mode !== "all"))
+    if (Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy) && S.tab !== "ideas" && S.tab !== "bt" && S.tab !== "nb" && (S.tab === "home" || S.mode !== "all"))
       S.tab === "home" ? shiftMonth(dx < 0 ? 1 : -1) : shift(dx < 0 ? 1 : -1);
   }, { passive: true });
 })();
