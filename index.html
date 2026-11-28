@@ -204,6 +204,12 @@ textarea.note { width: 100%; min-height: 70px; border-radius: 12px; border: 1px 
 .shot { background: var(--surface-2); border-radius: 12px; overflow: hidden; }
 .shot .cap { font-size: 12px; color: var(--text-2); padding: 6px 10px; }
 .shot img { display: block; width: 100%; min-height: 120px; background: var(--surface-2); }
+.sbox .seg { width: auto; margin-bottom: 10px; }
+.sbox .seg button { height: 38px; font-size: 14px; }
+.sbox .chips.one, .sbox .off { display: none; }
+.sbox .shot { position: relative; }
+.sbox .shot img { cursor: zoom-in; }
+.sbadge { position: absolute; top: 8px; left: 8px; z-index: 1; background: rgba(0,0,0,.66); color: #fff; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 8px; pointer-events: none; }
 .viewer { position: fixed; inset: 0; z-index: 60; background: #000; overflow: hidden; display: flex; align-items: center; touch-action: none; }
 .viewer img { width: 100%; height: auto; transform-origin: 0 0; will-change: transform; user-select: none; -webkit-user-drag: none; }
 .viewer button { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 12px; width: 40px; height: 40px; border-radius: 20px; background: rgba(255,255,255,.18); color: #fff; font-size: 22px; }
@@ -355,7 +361,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "15e4121c3621";
+const APPV = "39dbb1465a4d";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -1064,29 +1070,63 @@ function closeSheet(fromPop) {
 sheetBg.onclick = () => closeSheet();
 window.addEventListener("popstate", () => { if (!document.getElementById("viewer").classList.contains("hidden")) return closeViewer(true); closeSheet(true); });
 
-/* скрины: группа (объяснение / вход / выход) со временем, внутри — по паре: своя пара (направление) отдельно от модели (SPX, DXY) */
+/* скрины (2026-11-28, пользователь: «друг за другом идут — теряешься»): один блок — сверху момент (Вход / Выход),
+   под ним ТФ кнопками, на экране один скрин с плашкой «Вход · 30m · 17:56». Нажал на скрин — во весь экран, листаются все по порядку */
 const SHOT_ROLE = w => /SPX|US500|SP500/i.test(w) ? "модель" : /DXY/i.test(w) ? "доллар" : "";
 function shotsHtml(shots, kinds, names = {}, times = {}) {
   if (!shots || !shots.length) return "";
   const order = { "4h": 0, "1h": 1, "30m": 2, "5m": 3, "3m": 4, "1m": 5 };
-  let h = "";
+  const ms = [];
   for (const k of kinds) {
     const list = shots.filter(s => s.k === k);
     if (!list.length) continue;
-    const name = names[k] || (k === "Идея" ? "Скрины" : k);
-    const whos = [...new Set(list.map(s => s.who))].sort((a, b) => !!SHOT_ROLE(a) - !!SHOT_ROLE(b));
-    h += `<div class="card"><h3>${esc(name)}${times[k] ? ` · ${esc(times[k])}` : ""}</h3>`;
-    for (const w of whos) {
-      const ws = list.filter(s => s.who === w).sort((a, b) => (order[a.tf] ?? 9) - (order[b.tf] ?? 9));
-      if (whos.length > 1) h += `<div class="who">${esc(w)}${SHOT_ROLE(w) ? ` <span>· ${SHOT_ROLE(w)}</span>` : ""}</div>`;
-      h += `<div class="shots">${ws.map(s => `<div class="shot"><div class="cap">${esc(s.who)} · ${esc(s.tf)}</div><img data-f="${esc(s.f)}" data-cap="${esc(name + " · " + s.who + " " + s.tf)}" alt="${esc(s.who + " " + s.tf)}"></div>`).join("")}</div>`;
-    }
-    h += `</div>`;
+    const name = (names[k] || k).replace(/\s*\(.*\)$/, "");   // «Объяснение (до входа)» → «Объяснение»: кнопка короткая
+    const whos = [...new Set(list.map(s => s.who))].sort((a, b) => !!SHOT_ROLE(a) - !!SHOT_ROLE(b));   // своя пара первой, модель (SPX) после
+    const items = whos.flatMap(w => list.filter(s => s.who === w).sort((a, b) => (order[a.tf] ?? 9) - (order[b.tf] ?? 9)));
+    ms.push({ name, time: times[k] || "", items, main: whos[0], many: whos.length > 1 });
   }
-  return h;
+  if (!ms.length) return "";
+  let n = 0, segs = "", rows = "", imgs = "";
+  ms.forEach((m, mi) => {
+    segs += `<button data-sm="${mi}">${esc(m.name)}</button>`;
+    let c = "";
+    for (const s of m.items) {
+      const lab = (m.many && s.who !== m.main ? s.who + " " : "") + s.tf;
+      const badge = `${m.name} · ${lab}${m.time ? " · " + m.time : ""}`;
+      c += `<button class="chip" data-ss="${n}" data-lab="${esc(lab)}">${esc(lab)}</button>`;
+      imgs += `<div class="shot" data-ss="${n}" data-sm="${mi}"><div class="sbadge">${esc(badge)}</div><img data-f="${esc(s.f)}" data-cap="${esc(badge)}" alt="${esc(badge)}"></div>`;
+      n++;
+    }
+    rows += `<div class="chips${m.items.length < 2 ? " one" : ""}" data-sm="${mi}">${c}</div>`;
+  });
+  return `<div class="card sbox" data-sbox><h3>Скрины</h3>${ms.length > 1 ? `<div class="seg">${segs}</div>` : ""}${rows}<div class="sbimgs">${imgs}</div></div>`;
+}
+// блок скринов: показать один (ss), его момент и ТФ подсвечены; другой момент — тот же ТФ, если есть (Вход 30m → Выход 30m)
+function initShots(root) {
+  for (const box of root.querySelectorAll("[data-sbox]")) {
+    const pick = ss => {
+      const sh = box.querySelector(`.shot[data-ss="${ss}"]`); if (!sh) return;
+      const m = sh.dataset.sm; box.dataset.cur = ss;
+      box.querySelectorAll(".shot").forEach(x => x.classList.toggle("off", x !== sh));
+      box.querySelectorAll(".chips[data-sm]").forEach(x => x.classList.toggle("off", x.dataset.sm !== m));
+      box.querySelectorAll(".seg [data-sm]").forEach(x => x.classList.toggle("on", x.dataset.sm === m));
+      box.querySelectorAll(".chip[data-ss]").forEach(x => x.classList.toggle("on", x.dataset.ss === String(ss)));
+    };
+    box.pick = pick;
+    box.onclick = e => {
+      const c = e.target.closest(".chip[data-ss]"); if (c) return pick(c.dataset.ss);
+      const b = e.target.closest(".seg [data-sm]"); if (!b) return;
+      const cur = box.querySelector(`.chip[data-ss="${box.dataset.cur}"]`), lab = cur ? cur.dataset.lab : "";
+      const row = box.querySelector(`.chips[data-sm="${b.dataset.sm}"]`); if (!row) return;
+      const same = [...row.querySelectorAll(".chip")].find(x => x.dataset.lab === lab) || row.querySelector(".chip");
+      if (same) pick(same.dataset.ss);
+    };
+    pick(0);
+  }
 }
 const IMG = {};
 async function loadShots(root) {
+  initShots(root);
   for (const img of root.querySelectorAll("img[data-f]")) {
     const f = img.dataset.f;
     try {
@@ -1101,6 +1141,7 @@ const VIEW = { list: [], i: 0 };
 async function showView() {
   const it = VIEW.list[VIEW.i]; if (!it) return;
   resetViewer();
+  for (const im of sheetBody.querySelectorAll("[data-sbox] img[data-f]")) if (im.dataset.f === it.f) { const b = im.closest("[data-sbox]"); if (b.pick) b.pick(im.closest(".shot").dataset.ss); }   // закрыл просмотр — в карточке тот же скрин
   document.getElementById("viewerCap").textContent = (VIEW.list.length > 1 ? `${VIEW.i + 1} / ${VIEW.list.length} · ` : "") + it.cap;
   document.getElementById("viewerPrev").disabled = VIEW.i <= 0;
   document.getElementById("viewerNext").disabled = VIEW.i >= VIEW.list.length - 1;
