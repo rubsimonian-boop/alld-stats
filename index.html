@@ -206,6 +206,7 @@ textarea.note { width: 100%; min-height: 70px; border-radius: 12px; border: 1px 
 .shot img { display: block; width: 100%; min-height: 120px; background: var(--surface-2); }
 .sbox .seg { width: auto; margin-bottom: 10px; }
 .sbox .seg button { height: 38px; font-size: 14px; }
+.sbox .seg button.on { background: linear-gradient(180deg, #f0cf7a, #c4952f); color: #0f131c; }
 .sbox .chips.one, .sbox .off { display: none; }
 .sbox .shot { position: relative; }
 .sbox .shot img { cursor: zoom-in; }
@@ -361,7 +362,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 <script>
 "use strict";
 /* ============================================================ storage & crypto */
-const APPV = "39dbb1465a4d";
+const APPV = "0a5813457a16";
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
